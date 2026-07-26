@@ -267,6 +267,29 @@ struct AdvancedSettingsView: View {
             Section {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
+                        Image(systemName: "key")
+                            .foregroundColor(.secondary)
+                        SecureField("tvly-...", text: $settings.tavilyApiKey)
+                            .font(.system(size: 15))
+                        if settings.hasTavilyKey {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                        }
+                    }
+                    .padding(.vertical, 4)
+
+                    Text("Optional. Lets the AI search the web for current information when needed. Get a free key at [tavily.com](https://tavily.com) — 1,000 searches/month free.")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } header: {
+                Text("Web Search (Tavily)")
+            }
+
+            Section {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
                         Text("Temperature")
                         Spacer()
                         Text(String(format: "%.1f", settings.temperature))

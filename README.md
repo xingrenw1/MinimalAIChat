@@ -20,11 +20,13 @@ MinimalAIChat is a native iOS 15 application built to replace clunky web interfa
 * 💾 **Local History:** All your conversations are saved locally and securely on your device.
 * 🧹 **Smart Auto-Cleanup:** Empty or accidental sessions are automatically cleared on the next app launch, keeping your sidebar clutter-free.
 * 🔒 **Privacy First:** API calls travel directly from your phone to the provider. No intermediate servers, proxies, or data logging.
+* 🔎 **Web Search (optional):** Let the AI search the web for current information — news, recent events, anything past its training cutoff — using [Tavily](https://tavily.com). Works with any provider. The AI decides on its own when a search is actually needed.
 
 ## Requirements
 
 * **An iPhone running iOS 15.0** or higher.
 * **A valid API key** from a compatible provider (OpenAI, Google Gemini, OpenRouter, etc.). The app utilizes a standard OpenAI-compatible "Chat Completions" endpoint format.
+* *(Optional)* A free [Tavily](https://tavily.com) API key if you want the AI to be able to search the web — see [Enabling Web Search](#enabling-web-search-optional) below.
 
 ## Installation
 
@@ -65,6 +67,19 @@ An excellent choice if you want access to a variety of open-source and proprieta
 3. Click **Create Key**.
 
 > ⚠️ **Security Warning:** Never share your API key publicly or commit it to a public repository. MinimalAIChat stores your key securely inside the iOS Keychain; it is never saved in plaintext and is only used for direct, local requests to your chosen provider.
+
+## Enabling Web Search (Optional)
+
+MinimalAIChat can let the AI search the web for current information — news, recent events, or anything past its training cutoff — using [Tavily](https://tavily.com), a search API built for AI apps. This works with **any** provider (Gemini, OpenAI, OpenRouter, etc.), not just one.
+
+1. Go to [tavily.com](https://tavily.com) and create a free account.
+2. Copy your API key from the Tavily dashboard.
+3. In MinimalAIChat, paste it during onboarding, or later under **Settings → Advanced → Web Search (Tavily)**.
+4. *Cost:* Tavily's free tier includes 1,000 searches per month — more than enough for personal use.
+
+Once set, the AI will automatically search the web on its own whenever a question needs up-to-date information — you don't need to trigger it manually. Leave the field empty if you don't want this feature; the app works exactly the same without it.
+
+> ⚠️ Same security note as above applies: your Tavily key is stored in the iOS Keychain, never in plaintext, and is only used for direct requests to Tavily's API.
 
 ## Community & Support
 

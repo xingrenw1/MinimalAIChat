@@ -18,6 +18,7 @@ final class ChatViewModel: ObservableObject {
     @Published var activeSessionID: UUID
     @Published var inputText: String = ""
     @Published var isTyping: Bool = false
+    @Published var isSearchingWeb: Bool = false
     @Published private(set) var isStreamingActive: Bool = false
     /// Non-nil whenever the last API call failed. Cleared on the next successful send.
     @Published var lastError: APIError? = nil
@@ -206,91 +207,157 @@ final class ChatViewModel: ObservableObject {
         appendMessage(initialMessage, toSession: sessionIDAtDispatch)
         let messageID = initialMessage.id
 
-        let stream = apiService.streamChatCompletion(
-            messages: messagesToSend,
-            settings: settings
-        )
+        if settings.hasTavilyKey {
+            // --- Non-streaming path ---
+            // Any provider (Gemini included) with a Tavily key configured goes through
+            // the OpenAI-compatible endpoint with the function-calling tool loop.
+            do {
+                let fullText = try await apiService.sendChatCompletion(
+                    messages: messagesToSend,
+                    settings: settings,
+                    onSearchStarted: { [weak self] in
+                        Task { @MainActor [weak self] in
+                            self?.isSearchingWeb = true
+                        }
+                    }
+                )
 
-        var firstChunkReceived = false
-        var chunkCount = 0
+                // Check cancellation / session switch
+                guard !Task.isCancelled, activeSessionID == sessionIDAtDispatch else {
+                    isSearchingWeb = false
+                    cleanupPartialMessage(messageID: messageID, inSession: sessionIDAtDispatch, wasCancelled: true)
+                    isStreamingActive = false
+                    return
+                }
 
-        do {
-            for try await chunk in stream {
-                // Check cancellation *before* modifying state
+                isTyping = false
+                isSearchingWeb = false
+
+                // Set full text in one shot and mark complete
+                if let sessionIdx = sessions.firstIndex(where: { $0.id == sessionIDAtDispatch }),
+                   let msgIdx = sessions[sessionIdx].messages.firstIndex(where: { $0.id == messageID }) {
+                    sessions[sessionIdx].messages[msgIdx].content = fullText
+                    sessions[sessionIdx].messages[msgIdx].isComplete = true
+                    sessions[sessionIdx].lastUpdated = Date()
+                }
+
+                persistSessions()
+                isStreamingActive = false
+
+            } catch APIError.cancelled {
+                isTyping = false
+                isSearchingWeb = false
+                cleanupPartialMessage(messageID: messageID, inSession: sessionIDAtDispatch, wasCancelled: true)
+                isStreamingActive = false
+            } catch {
+                guard !Task.isCancelled, activeSessionID == sessionIDAtDispatch else {
+                    isSearchingWeb = false
+                    cleanupPartialMessage(messageID: messageID, inSession: sessionIDAtDispatch, wasCancelled: true)
+                    isStreamingActive = false
+                    return
+                }
+
+                isTyping = false
+                isSearchingWeb = false
+                cleanupPartialMessage(messageID: messageID, inSession: sessionIDAtDispatch, wasCancelled: false)
+
+                // Surface as typed error for the alert
+                lastError = error as? APIError ?? APIError.networkFailure(underlying: error)
+
+                // Also append an inline error bubble for in-context feedback
+                let errorText = buildErrorMessage(for: error)
+                appendMessage(ChatMessage(role: .assistant, content: errorText, isError: true), toSession: sessionIDAtDispatch)
+                isStreamingActive = false
+            }
+
+        } else {
+            // --- Streaming path (no search configured) ---
+            let stream = apiService.streamChatCompletion(
+                messages: messagesToSend,
+                settings: settings
+            )
+
+            var firstChunkReceived = false
+            var chunkCount = 0
+
+            do {
+                for try await chunk in stream {
+                    // Check cancellation *before* modifying state
+                    guard !Task.isCancelled else {
+                        cleanupPartialMessage(messageID: messageID, inSession: sessionIDAtDispatch, wasCancelled: true)
+                        isStreamingActive = false
+                        return
+                    }
+                    
+                    // If the user just switched sessions, stop streaming
+                    guard activeSessionID == sessionIDAtDispatch else {
+                        cleanupPartialMessage(messageID: messageID, inSession: sessionIDAtDispatch, wasCancelled: true)
+                        isStreamingActive = false
+                        return
+                    }
+
+                    if !firstChunkReceived {
+                        isTyping = false
+                        firstChunkReceived = true
+                    }
+
+                    if let sessionIdx = sessions.firstIndex(where: { $0.id == sessionIDAtDispatch }),
+                       let msgIdx = sessions[sessionIdx].messages.firstIndex(where: { $0.id == messageID }) {
+                        
+                        sessions[sessionIdx].messages[msgIdx].content += chunk
+                        sessions[sessionIdx].lastUpdated = Date()
+                        
+                        chunkCount += 1
+                        // Throttle persistence to avoid excessive disk I/O on every token
+                        if chunkCount % 10 == 0 {
+                            persistSessions()
+                        }
+                    }
+                }
+                
+                if !firstChunkReceived {
+                    isTyping = false
+                }
+
+                // Mark the message complete BEFORE cleanup, so persisted state is correct
+                if let sessionIdx = sessions.firstIndex(where: { $0.id == sessionIDAtDispatch }),
+                   let msgIdx = sessions[sessionIdx].messages.firstIndex(where: { $0.id == messageID }) {
+                    sessions[sessionIdx].messages[msgIdx].isComplete = true
+                }
+
+                // Final cleanup for the clean-finish case
+                cleanupPartialMessage(messageID: messageID, inSession: sessionIDAtDispatch, wasCancelled: false)
+                isStreamingActive = false
+
+            } catch APIError.cancelled {
+                // Silently swallow cancellations — the user switched sessions or view
+                isTyping = false
+                cleanupPartialMessage(messageID: messageID, inSession: sessionIDAtDispatch, wasCancelled: true)
+                isStreamingActive = false
+
+            } catch {
                 guard !Task.isCancelled else {
                     cleanupPartialMessage(messageID: messageID, inSession: sessionIDAtDispatch, wasCancelled: true)
                     isStreamingActive = false
-                    return
+                    return 
                 }
-                
-                // If the user just switched sessions, stop streaming
                 guard activeSessionID == sessionIDAtDispatch else {
                     cleanupPartialMessage(messageID: messageID, inSession: sessionIDAtDispatch, wasCancelled: true)
                     isStreamingActive = false
-                    return
+                    return 
                 }
-
-                if !firstChunkReceived {
-                    isTyping = false
-                    firstChunkReceived = true
-                }
-
-                if let sessionIdx = sessions.firstIndex(where: { $0.id == sessionIDAtDispatch }),
-                   let msgIdx = sessions[sessionIdx].messages.firstIndex(where: { $0.id == messageID }) {
-                    
-                    sessions[sessionIdx].messages[msgIdx].content += chunk
-                    sessions[sessionIdx].lastUpdated = Date()
-                    
-                    chunkCount += 1
-                    // Throttle persistence to avoid excessive disk I/O on every token
-                    if chunkCount % 10 == 0 {
-                        persistSessions()
-                    }
-                }
-            }
-            
-            if !firstChunkReceived {
+                
                 isTyping = false
-            }
+                cleanupPartialMessage(messageID: messageID, inSession: sessionIDAtDispatch, wasCancelled: false)
 
-            // Mark the message complete BEFORE cleanup, so persisted state is correct
-            if let sessionIdx = sessions.firstIndex(where: { $0.id == sessionIDAtDispatch }),
-               let msgIdx = sessions[sessionIdx].messages.firstIndex(where: { $0.id == messageID }) {
-                sessions[sessionIdx].messages[msgIdx].isComplete = true
-            }
+                // Surface as typed error for the alert
+                lastError = error as? APIError ?? APIError.networkFailure(underlying: error)
 
-            // Final cleanup for the clean-finish case
-            cleanupPartialMessage(messageID: messageID, inSession: sessionIDAtDispatch, wasCancelled: false)
-            isStreamingActive = false
-
-        } catch APIError.cancelled {
-            // Silently swallow cancellations — the user switched sessions or view
-            isTyping = false
-            cleanupPartialMessage(messageID: messageID, inSession: sessionIDAtDispatch, wasCancelled: true)
-            isStreamingActive = false
-
-        } catch {
-            guard !Task.isCancelled else {
-                cleanupPartialMessage(messageID: messageID, inSession: sessionIDAtDispatch, wasCancelled: true)
+                // Also append an inline error bubble for in-context feedback
+                let errorText = buildErrorMessage(for: error)
+                appendMessage(ChatMessage(role: .assistant, content: errorText, isError: true), toSession: sessionIDAtDispatch)
                 isStreamingActive = false
-                return 
             }
-            guard activeSessionID == sessionIDAtDispatch else {
-                cleanupPartialMessage(messageID: messageID, inSession: sessionIDAtDispatch, wasCancelled: true)
-                isStreamingActive = false
-                return 
-            }
-            
-            isTyping = false
-            cleanupPartialMessage(messageID: messageID, inSession: sessionIDAtDispatch, wasCancelled: false)
-
-            // Surface as typed error for the alert
-            lastError = error as? APIError ?? APIError.networkFailure(underlying: error)
-
-            // Also append an inline error bubble for in-context feedback
-            let errorText = buildErrorMessage(for: error)
-            appendMessage(ChatMessage(role: .assistant, content: errorText, isError: true), toSession: sessionIDAtDispatch)
-            isStreamingActive = false
         }
     }
 

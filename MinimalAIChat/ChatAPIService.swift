@@ -5,7 +5,27 @@ import Foundation
 /// A single message in the `messages` array sent to the API.
 struct APIMessage: Codable {
     let role: String
-    let content: String
+    let content: String?
+    let toolCallId: String?
+    let toolCalls: [ToolCall]?
+
+    enum CodingKeys: String, CodingKey {
+        case role, content
+        case toolCallId = "tool_call_id"
+        case toolCalls = "tool_calls"
+    }
+
+    init(role: String, content: String? = nil, toolCallId: String? = nil, toolCalls: [ToolCall]? = nil) {
+        self.role = role
+        self.content = content
+        self.toolCallId = toolCallId
+        self.toolCalls = toolCalls
+    }
+}
+
+/// Arguments expected for the web_search tool.
+private struct WebSearchArguments: Decodable {
+    let query: String
 }
 
 /// The full request body for `POST /chat/completions`.
@@ -15,13 +35,22 @@ struct ChatCompletionRequest: Encodable {
     let stream: Bool
     let temperature: Double
     let maxTokens: Int?
+    var tools: [ToolDefinition]? = nil
+    /// Explicit tool-choice directive ("auto", "none", etc). Omitted when nil,
+    /// which lets the API fall back to its own default ("auto"-like) behavior.
+    /// Set to "none" to explicitly force a text-only answer — this is the
+    /// documented, unambiguous way to disable tool calls, unlike simply
+    /// omitting `tools`, which some providers (observed with Gemini) don't
+    /// reliably honor as "don't call anything."
+    var toolChoice: String? = nil
 
     enum CodingKeys: String, CodingKey {
-        case model, messages, stream, temperature
+        case model, messages, stream, temperature, tools
         case maxTokens = "max_tokens"
+        case toolChoice = "tool_choice"
     }
     
-    // Explicit encode(to:) to ensure max_tokens is omitted entirely when nil
+    // Explicit encode(to:) to ensure max_tokens/tool_choice are omitted entirely when nil
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(model, forKey: .model)
@@ -29,6 +58,8 @@ struct ChatCompletionRequest: Encodable {
         try container.encode(stream, forKey: .stream)
         try container.encode(temperature, forKey: .temperature)
         try container.encodeIfPresent(maxTokens, forKey: .maxTokens)
+        try container.encodeIfPresent(tools, forKey: .tools)
+        try container.encodeIfPresent(toolChoice, forKey: .toolChoice)
     }
 }
 
@@ -72,6 +103,12 @@ struct ChatCompletionStreamResponse: Decodable {
 
     struct Delta: Decodable {
         let content: String?
+        let toolCalls: [ToolCall]?
+
+        enum CodingKeys: String, CodingKey {
+            case content
+            case toolCalls = "tool_calls"
+        }
     }
 }
 
@@ -87,6 +124,7 @@ enum APIError: LocalizedError {
     case decodingFailed(underlying: String)
     case networkFailure(underlying: Error)
     case cancelled
+    case unsupportedToolFormat
 
     var errorDescription: String? {
         switch self {
@@ -107,6 +145,8 @@ enum APIError: LocalizedError {
             return "Network error: \(error.localizedDescription)"
         case .cancelled:
             return "Request was cancelled."
+        case .unsupportedToolFormat:
+            return "This model tried to use a tool in a way this app doesn't support. Try rephrasing your question, or disable web search for this model in Settings."
         }
     }
 }
@@ -146,7 +186,8 @@ final class ChatAPIService {
     /// - Throws: A typed `APIError` on any failure.
     func sendChatCompletion(
         messages: [ChatMessage],
-        settings: SettingsViewModel
+        settings: SettingsViewModel,
+        onSearchStarted: (@Sendable () -> Void)? = nil
     ) async throws -> String {
 
         // ── 1. Validate inputs ─────────────────────────────────────────────
@@ -192,12 +233,15 @@ final class ChatAPIService {
         let userMessages  = messages.map { APIMessage(role: $0.role.rawValue, content: $0.content) }
         let apiMessages   = [systemMessage] + userMessages
 
+        let toolsToSend: [ToolDefinition]? = settings.hasTavilyKey ? [ToolDefinition.webSearch] : nil
+
         let body = ChatCompletionRequest(
             model: model,
             messages: apiMessages,
             stream: false,
             temperature: settings.temperature,
-            maxTokens: settings.maxTokens
+            maxTokens: settings.maxTokens,
+            tools: toolsToSend
         )
 
         let encoder = JSONEncoder()
@@ -210,6 +254,7 @@ final class ChatAPIService {
 
         // ── 3. Assemble URLRequest ─────────────────────────────────────────
         var request = URLRequest(url: url)
+        request.assumesHTTP3Capable = false
         request.httpMethod  = "POST"
         request.httpBody    = bodyData
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -244,19 +289,252 @@ final class ChatAPIService {
         guard !data.isEmpty else { throw APIError.emptyResponse }
 
         let decoder = JSONDecoder()
+        let completion: ChatCompletionResponse
         do {
-            let completion = try decoder.decode(ChatCompletionResponse.self, from: data)
-            guard let text = completion.choices.first?.message.content, !text.isEmpty else {
-                throw APIError.emptyResponse
-            }
-            return text
+            completion = try decoder.decode(ChatCompletionResponse.self, from: data)
         } catch let decodingError as DecodingError {
             let raw = String(data: data, encoding: .utf8) ?? "<binary>"
             throw APIError.decodingFailed(underlying: "\(decodingError) | Raw body: \(raw.prefix(300))")
         }
+
+        // ── 7. Handle Tool Calls or Return Text (bounded loop) ─────────────
+        // Some providers (observed with Gemini via the OpenAI-compatible endpoint)
+        // can request another web_search even when `tools` is omitted from the
+        // follow-up request. A single rigid follow-up isn't enough for legitimate
+        // multi-step lookups either (e.g. "what formation did each team use" needs
+        // two separate searches). This loop allows a small, fixed number of search
+        // rounds, then forces a final text answer on the last one.
+        guard let firstMessage = completion.choices.first?.message else {
+            throw APIError.emptyResponse
+        }
+
+        var currentMessages = apiMessages
+        var pendingMessage = firstMessage
+        let maxSearchRounds = 3
+        var roundsUsed = 0
+        var aggregatedSearchResults: [String] = []
+
+        while let toolCalls = pendingMessage.toolCalls,
+              toolCalls.contains(where: { $0.function.name == "web_search" }) {
+
+            if roundsUsed == 0 {
+                onSearchStarted?()
+            }
+
+            roundsUsed += 1
+
+            // a. & b. Resolve EVERY tool call in this turn, not just the first.
+            // The API requires exactly one 'tool' message per 'tool_call_id' that
+            // appeared in the assistant message — sending back a mismatched count
+            // (e.g. when the model requests two searches in the same turn) causes
+            // a 400 ("insufficient tool messages following tool_calls message").
+            var toolResultMessages: [APIMessage] = []
+
+            for call in toolCalls {
+                guard call.function.name == "web_search" else {
+                    // Unrecognized/hallucinated tool call — still must respond so
+                    // its tool_call_id isn't left unanswered.
+                    toolResultMessages.append(
+                        APIMessage(role: "tool", content: "This tool is not available.", toolCallId: call.id)
+                    )
+                    continue
+                }
+
+                var query = ""
+                if let argumentsString = call.function.arguments,
+                   let argsData = argumentsString.data(using: .utf8),
+                   let args = try? decoder.decode(WebSearchArguments.self, from: argsData) {
+                    query = args.query
+                }
+
+                var toolResultContent = ""
+                do {
+                    if query.trimmingCharacters(in: .whitespaces).isEmpty {
+                        throw URLError(.badURL) // generic failure if parsing failed
+                    }
+                    toolResultContent = try await TavilySearchService.shared.search(query: query, apiKey: settings.tavilyApiKey)
+                } catch {
+                    toolResultContent = "Web search failed: \(error.localizedDescription)"
+                }
+
+                aggregatedSearchResults.append(toolResultContent)
+
+                toolResultMessages.append(
+                    APIMessage(role: "tool", content: toolResultContent, toolCallId: call.id)
+                )
+            }
+
+            // c. Append this round's assistant tool-calls + ALL matching tool results
+            let assistantMessage = APIMessage(role: "assistant", content: pendingMessage.content, toolCalls: toolCalls)
+            currentMessages += [assistantMessage] + toolResultMessages
+
+            // On the last allowed round, keep the tool declared but explicitly forbid
+            // using it via tool_choice: "none" — this is the documented, unambiguous
+            // way to force a text-only answer. Simply omitting `tools` was tried
+            // previously and isn't reliably honored by every provider.
+            let isFinalRound = roundsUsed >= maxSearchRounds
+            let followUpBody = ChatCompletionRequest(
+                model: model,
+                messages: currentMessages,
+                stream: false,
+                temperature: settings.temperature,
+                maxTokens: settings.maxTokens,
+                tools: [ToolDefinition.webSearch],
+                toolChoice: isFinalRound ? "none" : nil
+            )
+
+            let followUpData: Data
+            do {
+                followUpData = try encoder.encode(followUpBody)
+            } catch {
+                throw APIError.networkFailure(underlying: error)
+            }
+
+            var followUpRequest = request
+            followUpRequest.assumesHTTP3Capable = false
+            followUpRequest.httpBody = followUpData
+
+            // d. Send follow-up request
+            let (followUpResponseData, followUpResponse): (Data, URLResponse)
+            do {
+                (followUpResponseData, followUpResponse) = try await session.data(for: followUpRequest)
+            } catch let urlError as URLError where urlError.code == .timedOut {
+                throw APIError.timedOut
+            } catch let urlError as URLError where urlError.code == .cancelled {
+                throw APIError.cancelled
+            } catch {
+                throw APIError.networkFailure(underlying: error)
+            }
+
+            if let http2 = followUpResponse as? HTTPURLResponse, !(200..<300).contains(http2.statusCode) {
+                let serverMsg = extractServerError(from: followUpResponseData)
+                throw APIError.httpError(statusCode: http2.statusCode, serverMessage: serverMsg)
+            }
+
+            let followUpCompletion: ChatCompletionResponse
+            do {
+                followUpCompletion = try decoder.decode(ChatCompletionResponse.self, from: followUpResponseData)
+            } catch let decodingError as DecodingError {
+                let raw = String(data: followUpResponseData, encoding: .utf8) ?? "<binary>"
+                throw APIError.decodingFailed(underlying: "\(decodingError) | Raw body: \(raw.prefix(300))")
+            }
+
+            guard let nextMessage = followUpCompletion.choices.first?.message else {
+                throw APIError.emptyResponse
+            }
+
+            if let text = nextMessage.content, !text.isEmpty {
+                guard !looksLikeUnsupportedToolCallArtifact(text) else {
+                    throw APIError.unsupportedToolFormat
+                }
+                return text
+            }
+
+            // No text yet. tool_choice: "none" was set on this round but Gemini
+            // still returned another tool call — confirmed via testing that this
+            // provider doesn't always honor it once a conversation is a few turns
+            // deep into function-calling. Rather than give up, make one final,
+            // completely separate plain-text request with no tool-calling shape
+            // at all (no tools, no tool_choice, no prior assistant/tool turns) so
+            // the model has nothing to pattern-match back into "call a tool" —
+            // just a normal writing task using what was already found.
+            if isFinalRound {
+                let originalQuestion = messages.last(where: { $0.role == .user })?.content ?? ""
+                let combinedFindings = aggregatedSearchResults.enumerated()
+                    .map { "Search \($0.offset + 1) results:\n\($0.element)" }
+                    .joined(separator: "\n\n")
+
+                let synthesisPrompt = """
+                Answer the user's question below using ONLY the search findings provided. \
+                Do not attempt to search again — just write your best answer now, in plain text, \
+                and say so if some details are still missing.
+
+                User's question: \(originalQuestion)
+
+                \(combinedFindings)
+                """
+
+                let synthesisMessages = [
+                    systemMessage,
+                    APIMessage(role: "user", content: synthesisPrompt)
+                ]
+
+                let synthesisBody = ChatCompletionRequest(
+                    model: model,
+                    messages: synthesisMessages,
+                    stream: false,
+                    temperature: settings.temperature,
+                    maxTokens: settings.maxTokens,
+                    tools: nil,
+                    toolChoice: nil
+                )
+
+                let synthesisData: Data
+                do {
+                    synthesisData = try encoder.encode(synthesisBody)
+                } catch {
+                    throw APIError.networkFailure(underlying: error)
+                }
+
+                var synthesisRequest = request
+                synthesisRequest.assumesHTTP3Capable = false
+                synthesisRequest.httpBody = synthesisData
+
+                let (synthesisResponseData, synthesisResponse): (Data, URLResponse)
+                do {
+                    (synthesisResponseData, synthesisResponse) = try await session.data(for: synthesisRequest)
+                } catch let urlError as URLError where urlError.code == .timedOut {
+                    throw APIError.timedOut
+                } catch let urlError as URLError where urlError.code == .cancelled {
+                    throw APIError.cancelled
+                } catch {
+                    throw APIError.networkFailure(underlying: error)
+                }
+
+                if let httpSynth = synthesisResponse as? HTTPURLResponse, !(200..<300).contains(httpSynth.statusCode) {
+                    let serverMsg = extractServerError(from: synthesisResponseData)
+                    throw APIError.httpError(statusCode: httpSynth.statusCode, serverMessage: serverMsg)
+                }
+
+                let synthesisCompletion: ChatCompletionResponse
+                do {
+                    synthesisCompletion = try decoder.decode(ChatCompletionResponse.self, from: synthesisResponseData)
+                } catch let decodingError as DecodingError {
+                    let raw = String(data: synthesisResponseData, encoding: .utf8) ?? "<binary>"
+                    throw APIError.decodingFailed(underlying: "\(decodingError) | Raw body: \(raw.prefix(300))")
+                }
+
+                guard let synthesisText = synthesisCompletion.choices.first?.message.content, !synthesisText.isEmpty else {
+                    throw APIError.emptyResponse
+                }
+                guard !looksLikeUnsupportedToolCallArtifact(synthesisText) else {
+                    throw APIError.unsupportedToolFormat
+                }
+
+                return synthesisText
+            }
+
+            pendingMessage = nextMessage
+        }
+
+        // No (further) tool call — return this message's text directly.
+        guard let text = pendingMessage.content, !text.isEmpty else {
+            throw APIError.emptyResponse
+        }
+        guard !looksLikeUnsupportedToolCallArtifact(text) else {
+            throw APIError.unsupportedToolFormat
+        }
+        return text
     }
 
     /// Sends the full conversation history and returns an async stream of assistant reply chunks.
+    ///
+    /// This method is only used for the no-search case (no Tavily key configured).
+    /// It intentionally never declares tools and never handles tool calls — Gemini's
+    /// streaming implementation breaks when a tool call is involved, which is why
+    /// the search-enabled path goes through the non-streaming `sendChatCompletion()`
+    /// instead. Keeping this method free of any tool-handling code prevents that
+    /// already-documented bug from being reintroduced by accident later.
     ///
     /// - Parameters:
     ///   - messages: All `ChatMessage` values in the active session.
@@ -304,12 +582,14 @@ final class ChatAPIService {
                     let userMessages  = messages.map { APIMessage(role: $0.role.rawValue, content: $0.content) }
                     let apiMessages   = [systemMessage] + userMessages
 
+                    // This method never declares tools — see the doc comment above.
                     let body = ChatCompletionRequest(
                         model: model,
                         messages: apiMessages,
                         stream: true,
                         temperature: settings.temperature,
-                        maxTokens: settings.maxTokens
+                        maxTokens: settings.maxTokens,
+                        tools: nil
                     )
 
                     let encoder = JSONEncoder()
@@ -317,6 +597,7 @@ final class ChatAPIService {
 
                     // ── 4. Assemble URLRequest ─────────────────────────────────────────
                     var request = URLRequest(url: url)
+                    request.assumesHTTP3Capable = false
                     request.httpMethod  = "POST"
                     request.httpBody    = bodyData
                     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -328,7 +609,7 @@ final class ChatAPIService {
                     }
 
                     // ── 5. Fire request ────────────────────────────────────────────────
-                    let (result, response) = try await session.bytes(for: request)
+                    let (result, response) = try await self.session.bytes(for: request)
 
                     // ── 6. Validate HTTP status ────────────────────────────────────────
                     if let http = response as? HTTPURLResponse,
@@ -343,6 +624,7 @@ final class ChatAPIService {
 
                     // ── 7. Read Stream ─────────────────────────────────────────────────
                     let decoder = JSONDecoder()
+
                     for try await line in result.lines {
                         if Task.isCancelled {
                             throw APIError.cancelled
@@ -353,13 +635,20 @@ final class ChatAPIService {
                             break
                         }
                         if let data = payload.data(using: .utf8) {
-                            if let chunk = try? decoder.decode(ChatCompletionStreamResponse.self, from: data),
-                               let text = chunk.choices.first?.delta.content {
-                                continuation.yield(text)
+                            do {
+                                let chunk = try decoder.decode(ChatCompletionStreamResponse.self, from: data)
+                                if let text = chunk.choices.first?.delta.content {
+                                    continuation.yield(text)
+                                }
+                            } catch {
+                                // Silently skip malformed SSE payloads — a single
+                                // bad chunk shouldn't interrupt the stream.
                             }
                         }
                     }
+
                     continuation.finish()
+
                 } catch let urlError as URLError where urlError.code == .timedOut {
                     continuation.finish(throwing: APIError.timedOut)
                 } catch let urlError as URLError where urlError.code == .cancelled {
@@ -379,6 +668,35 @@ final class ChatAPIService {
 
     // MARK: - Private Helpers
 
+    /// Detects the non-standard, provider-specific "fake tool call" text some
+    /// models (observed with DeepSeek) emit as plain content instead of a
+    /// structured `tool_calls` response. Confirmed via a real raw response body
+    /// that the actual text contains LITERAL SPACES between symbols, e.g.
+    /// `< | | DSML | | tool_calls>` — not the tighter `<|DSML||tool_calls>`
+    /// originally assumed. This syntax is undocumented, provider-specific, and
+    /// its exact spacing isn't guaranteed to be stable, so the check below is
+    /// whitespace-tolerant rather than relying on an exact substring match.
+    private func looksLikeUnsupportedToolCallArtifact(_ text: String) -> Bool {
+        let lowered = text.lowercased()
+
+        // Strongest, most specific signal: "dsml" is extremely unlikely to
+        // appear in any normal conversational answer, in any language, so its
+        // mere presence is enough on its own.
+        if lowered.contains("dsml") {
+            return true
+        }
+
+        // Secondary, whitespace-tolerant structural check: strip all whitespace
+        // before looking for the "<|" shape, so stray spaces between symbols
+        // (as seen in the real DeepSeek output) don't defeat the match. This
+        // also gives some coverage for similar-but-not-identical artifacts
+        // from other providers that don't literally say "dsml".
+        let compact = text.filter { !$0.isWhitespace }
+        guard compact.contains("<|") else { return false }
+        let loweredCompact = compact.lowercased()
+        return loweredCompact.contains("tool_call") || loweredCompact.contains("invoke")
+    }
+
     /// Attempts to parse `{"error":{"message":"..."}}` (OpenAI error format).
     private func extractServerError(from data: Data) -> String {
         struct ErrorWrapper: Decodable {
@@ -391,4 +709,5 @@ final class ChatAPIService {
         }
         return String(data: data, encoding: .utf8).map { String($0.prefix(200)) } ?? ""
     }
+
 }

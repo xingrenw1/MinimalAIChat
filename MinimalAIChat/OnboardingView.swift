@@ -17,7 +17,9 @@ struct OnboardingView: View {
     @State private var apiKey: String = ""
     @State private var baseURL: String = ""
     @State private var modelName: String = ""
+    @State private var tavilyApiKey: String = ""
     @State private var isAPIKeyVisible: Bool = false
+    @State private var isTavilyKeyVisible: Bool = false
     @State private var shakeUserName: Bool = false
     @State private var shakeBaseURL: Bool = false
     @State private var shakeModelName: Bool = false
@@ -40,6 +42,7 @@ struct OnboardingView: View {
                     baseURLField
                     modelNameField
                     apiKeyField
+                    tavilyApiKeyField
                 }
                 .padding(.horizontal, 28)
 
@@ -181,6 +184,42 @@ struct OnboardingView: View {
         }
     }
 
+    private var tavilyApiKeyField: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Tavily API Key (optional)", systemImage: "magnifyingglass")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.secondary)
+
+            HStack(spacing: 8) {
+                Group {
+                    if isTavilyKeyVisible {
+                        TextField("tvly-...", text: $tavilyApiKey)
+                    } else {
+                        SecureField("tvly-...", text: $tavilyApiKey)
+                    }
+                }
+                .font(.system(size: 15, design: .monospaced))
+                .autocapitalization(.none)
+                .disableAutocorrection(true)
+
+                Button { isTavilyKeyVisible.toggle() } label: {
+                    Image(systemName: isTavilyKeyVisible ? "eye.slash" : "eye")
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(Color(.secondarySystemBackground))
+            .cornerRadius(12)
+
+            Text("Tavily powers real-time web search, so your assistant can look up current information instead of relying only on what it already knows. Get a free key at tavily.com. Stored securely in the iOS Keychain — you can skip this and add it later in Settings.")
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
     private var continueButton: some View {
         Button(action: finish) {
             HStack(spacing: 8) {
@@ -235,6 +274,12 @@ struct OnboardingView: View {
         let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedKey.isEmpty {
             settings.apiKey = trimmedKey   // SettingsViewModel.didSet saves to Keychain
+        }
+
+        // Persist Tavily API key the same way — entirely optional, no validation
+        let trimmedTavilyKey = tavilyApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedTavilyKey.isEmpty {
+            settings.tavilyApiKey = trimmedTavilyKey   // SettingsViewModel.didSet saves to Keychain
         }
 
         settings.baseURL = trimmedURL

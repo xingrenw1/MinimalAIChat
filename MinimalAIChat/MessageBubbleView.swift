@@ -4,6 +4,7 @@ import SwiftUI
 struct MessageBubbleView: View {
 
     let message: ChatMessage
+    var isSearching: Bool = false
 
     private var isUser: Bool { message.role == .user }
 
@@ -52,17 +53,22 @@ struct MessageBubbleView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 if message.content.isEmpty {
-                    TypingDotsView()
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 2)
+                    if isSearching {
+                        WebSearchIndicatorView()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 2)
+                    } else {
+                        TypingDotsView()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 2)
+                    }
                 } else {
-                    markdownText(from: message.content)
+                    formattedContent(from: message.content)
                         .font(.system(size: 16))
                         .lineSpacing(4)
                         .multilineTextAlignment(.leading)
                         .foregroundColor(.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Text(formattedTime(message.timestamp))
@@ -77,42 +83,139 @@ struct MessageBubbleView: View {
         .padding(.vertical, 6)
     }
 
-    /// Converts a raw API response string into a SwiftUI `Text` with Markdown rendering.
-    ///
-    /// Strategy:
-    ///   1. Replace single `\n` (that are NOT already part of a blank-line paragraph break)
-    ///      with two trailing spaces + `\n`. This is the CommonMark hard-break syntax, which
-    ///      forces `AttributedString` to honour every newline instead of collapsing them into
-    ///      a space.
-    ///   2. Parse the resulting string with `AttributedString(markdown:)`.
-    ///   3. Fall back to a plain `Text` if parsing throws.
-    private func markdownText(from raw: String) -> Text {
-        // Normalise Windows-style line endings first
+    /// A minimal, deliberately narrow block model. Only headings and unordered
+    /// bullet items are recognized as distinct blocks; everything else — including
+    /// tables, ordered/numbered lists, and code blocks — stays exactly as it
+    /// rendered before, as plain paragraph text through the existing inline
+    /// Markdown renderer. This keeps the change small and low-risk instead of
+    /// trying to handle every possible construct different providers might emit.
+    private enum ContentBlock {
+        case heading(level: Int, text: String)
+        case bulletItem(text: String)
+        case paragraph(String)
+    }
+
+    /// Splits raw text into `ContentBlock`s, recognizing only `#`-style headings
+    /// and `-`/`*`/`+` bullet items at the start of a line. Everything else is
+    /// accumulated into paragraph blocks exactly as before (blank-line-separated,
+    /// with single newlines converted to CommonMark hard-breaks).
+    private func parseBlocks(from raw: String) -> [ContentBlock] {
         let normalised = raw.replacingOccurrences(of: "\r\n", with: "\n")
                             .replacingOccurrences(of: "\r",   with: "\n")
+        let lines = normalised.components(separatedBy: "\n")
 
-        // Convert every single newline into a CommonMark hard-break.
-        // A "hard break" is two spaces followed by \n.
-        // We must NOT double-convert lines that are already blank (i.e. \n\n).
-        // Approach: split on blank lines (paragraph boundaries), process each paragraph,
-        // then rejoin with blank lines.
-        let paragraphs = normalised.components(separatedBy: "\n\n")
-        let processed = paragraphs.map { paragraph -> String in
-            // Within a paragraph, turn each \n into a hard-break \n
-            // but leave fenced code blocks untouched.
-            paragraph.replacingOccurrences(of: "\n", with: "  \n")
-        }.joined(separator: "\n\n")
+        var blocks: [ContentBlock] = []
+        var paragraphBuffer: [String] = []
 
+        func flushParagraph() {
+            guard !paragraphBuffer.isEmpty else { return }
+            let joined = paragraphBuffer.joined(separator: "  \n")
+            blocks.append(.paragraph(joined))
+            paragraphBuffer.removeAll()
+        }
+
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+
+            if trimmed.isEmpty {
+                flushParagraph()
+                continue
+            }
+
+            if let heading = headingInfo(of: trimmed) {
+                flushParagraph()
+                blocks.append(.heading(level: heading.level, text: heading.text))
+                continue
+            }
+
+            if let bulletText = bulletItemText(of: trimmed) {
+                flushParagraph()
+                blocks.append(.bulletItem(text: bulletText))
+                continue
+            }
+
+            paragraphBuffer.append(line)
+        }
+        flushParagraph()
+
+        return blocks
+    }
+
+    /// Recognizes `#` through `######` at the start of a line, requiring a space
+    /// after the hashes (standard Markdown heading syntax).
+    private func headingInfo(of line: String) -> (level: Int, text: String)? {
+        guard line.hasPrefix("#") else { return nil }
+        var level = 0
+        var idx = line.startIndex
+        while idx < line.endIndex, line[idx] == "#" {
+            level += 1
+            idx = line.index(after: idx)
+        }
+        guard level >= 1, level <= 6, idx < line.endIndex, line[idx] == " " else { return nil }
+        let text = String(line[line.index(after: idx)...]).trimmingCharacters(in: .whitespaces)
+        guard !text.isEmpty else { return nil }
+        return (level, text)
+    }
+
+    /// Recognizes `- `, `* `, or `+ ` at the start of a line. Deliberately does
+    /// NOT handle ordered/numbered lists (`1. `), to avoid false positives with
+    /// normal prose that happens to start with a number.
+    private func bulletItemText(of line: String) -> String? {
+        if line.hasPrefix("- ") { return String(line.dropFirst(2)) }
+        if line.hasPrefix("* ") { return String(line.dropFirst(2)) }
+        if line.hasPrefix("+ ") { return String(line.dropFirst(2)) }
+        return nil
+    }
+
+    /// Renders a single block's text as inline Markdown (bold/italic), exactly
+    /// like the original renderer — this part is unchanged, just applied per
+    /// block instead of to the whole message at once.
+    private func inlineMarkdownText(from text: String) -> Text {
         do {
             var options = AttributedString.MarkdownParsingOptions()
-            options.interpretedSyntax = .full
+            options.interpretedSyntax = .inlineOnlyPreservingWhitespace
             options.allowsExtendedAttributes = true
             options.failurePolicy = .returnPartiallyParsedIfPossible
-            let attrStr = try AttributedString(markdown: processed, options: options)
+            let attrStr = try AttributedString(markdown: text, options: options)
             return Text(attrStr)
         } catch {
-            // Fallback: plain text preserves spaces/newlines without any rendering glitches
-            return Text(raw)
+            return Text(text)
+        }
+    }
+
+    private func headingFont(for level: Int) -> Font {
+        switch level {
+        case 1: return .system(size: 21, weight: .bold)
+        case 2: return .system(size: 19, weight: .bold)
+        default: return .system(size: 17, weight: .bold)
+        }
+    }
+
+    /// Builds the full message content as a vertical stack of blocks — headings,
+    /// bullet items, and paragraphs — replacing the old single-`Text` renderer.
+    @ViewBuilder
+    private func formattedContent(from raw: String) -> some View {
+        let blocks = parseBlocks(from: raw)
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+                switch block {
+                case .heading(let level, let text):
+                    inlineMarkdownText(from: text)
+                        .font(headingFont(for: level))
+                        .fixedSize(horizontal: false, vertical: true)
+
+                case .bulletItem(let text):
+                    HStack(alignment: .top, spacing: 6) {
+                        Text("•")
+                        inlineMarkdownText(from: text)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                case .paragraph(let text):
+                    inlineMarkdownText(from: text)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
         }
     }
 
@@ -208,6 +311,36 @@ struct TypingDotsView: View {
             phase = (phase + 1) % 3
         }
         .frame(height: 20)
+    }
+}
+
+// MARK: - Web Search Indicator View
+
+struct WebSearchIndicatorView: View {
+    @State private var isPulsing = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.secondary)
+                .rotationEffect(.degrees(isPulsing ? 12 : -12))
+                .animation(
+                    .easeInOut(duration: 0.9).repeatForever(autoreverses: true),
+                    value: isPulsing
+                )
+
+            Text("Searching the web…")
+                .font(.system(size: 14))
+                .foregroundColor(.secondary)
+                .opacity(isPulsing ? 0.5 : 1.0)
+                .animation(
+                    .easeInOut(duration: 0.9).repeatForever(autoreverses: true),
+                    value: isPulsing
+                )
+        }
+        .frame(height: 20)
+        .onAppear { isPulsing = true }
     }
 }
 

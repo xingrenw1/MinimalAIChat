@@ -13,6 +13,7 @@ enum SettingsKey {
     static let temperature = "settings.temperature"
     static let maxTokens   = "settings.maxTokens"
     static let historyCharacterBudget = "settings.historyCharacterBudget"
+    static let tavilyApiKey = "settings.tavilyApiKey"
 }
 
 // MARK: - Default Values
@@ -49,6 +50,10 @@ final class SettingsViewModel: ObservableObject {
     /// Never persisted in memory beyond this object; written to Keychain on change.
     @Published var apiKey: String {
         didSet { KeychainHelper.shared.save(apiKey, forKey: SettingsKey.apiKey) }
+    }
+
+    @Published var tavilyApiKey: String {
+        didSet { KeychainHelper.shared.save(tavilyApiKey, forKey: SettingsKey.tavilyApiKey) }
     }
 
     /// The user's display name — shared key with OnboardingView's @AppStorage("userName").
@@ -90,6 +95,7 @@ final class SettingsViewModel: ObservableObject {
     }
 
     var hasAPIKey: Bool { !apiKey.isEmpty }
+    var hasTavilyKey: Bool { !tavilyApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     // MARK: - Init
 
@@ -98,6 +104,7 @@ final class SettingsViewModel: ObservableObject {
         self.baseURL   = defaults.string(forKey: SettingsKey.baseURL)   ?? SettingsDefault.baseURL
         self.modelName = defaults.string(forKey: SettingsKey.modelName) ?? SettingsDefault.modelName
         self.apiKey    = KeychainHelper.shared.read(forKey: SettingsKey.apiKey) ?? ""
+        self.tavilyApiKey = KeychainHelper.shared.read(forKey: SettingsKey.tavilyApiKey) ?? ""
         self.userName  = defaults.string(forKey: SettingsKey.userName)  ?? ""
         self.profileImage = ProfileImageManager.load()
         self.temperature = defaults.object(forKey: SettingsKey.temperature) as? Double ?? SettingsDefault.temperature
@@ -113,8 +120,5 @@ final class SettingsViewModel: ObservableObject {
         modelName = SettingsDefault.modelName
         apiKey    = ""
         KeychainHelper.shared.delete(forKey: SettingsKey.apiKey)
-        temperature = SettingsDefault.temperature
-        maxTokens = nil
-        historyCharacterBudget = SettingsDefault.historyCharacterBudget
     }
 }

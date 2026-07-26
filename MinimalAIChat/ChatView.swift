@@ -13,6 +13,14 @@ struct ChatView: View {
     /// Publishes keyboard frame changes so we can auto-scroll when it appears.
     @State private var keyboardHeight: CGFloat = 0
 
+    /// Tracks the ID of the last message whose content we've already seen become
+    /// non-empty. Used to distinguish "this message's content just appeared for
+    /// the first time" (instant/Tavily replies, or the very first streaming
+    /// token) from "this message is still growing" (subsequent streaming
+    /// chunks), so each case can scroll appropriately — see the content-change
+    /// handler below.
+    @State private var lastSeenNonEmptyMessageID: UUID? = nil
+
     var body: some View {
         VStack(spacing: 0) {
 
@@ -25,7 +33,7 @@ struct ChatView: View {
                     // whenever content grows in place (streaming / regenerate).
                     VStack(spacing: 8) {
                         ForEach(viewModel.activeMessages) { message in
-                            MessageBubbleView(message: message)
+                            MessageBubbleView(message: message, isSearching: viewModel.isSearchingWeb)
                                 .id(message.id)
                         }
 
@@ -73,9 +81,40 @@ struct ChatView: View {
                 .onChange(of: viewModel.activeMessages.count) { _ in
                     scrollToBottom(proxy: proxy, animated: true)
                 }
-                // Last message content updated in place (streaming tokens)
-                .onChange(of: viewModel.activeMessages.last?.content) { _ in
-                    scrollToBottom(proxy: proxy, animated: false)
+                // Last message content updated in place (streaming tokens, or a
+                // single instant update for the non-streaming Tavily path). The
+                // first time a message's content becomes non-empty, jump to the
+                // TOP of that specific message instead of the bottom anchor —
+                // this matters most for instant replies, where the full text
+                // appears in one step and landing at the very bottom would
+                // otherwise hide the beginning of a long answer. Subsequent
+                // updates to the same message (streaming growth) keep scrolling
+                // toward the bottom exactly as before.
+                .onChange(of: viewModel.activeMessages.last?.content) { newContent in
+                    guard let lastMessage = viewModel.activeMessages.last,
+                          let newContent = newContent,
+                          !newContent.isEmpty else { return }
+
+                    if lastSeenNonEmptyMessageID != lastMessage.id {
+                        lastSeenNonEmptyMessageID = lastMessage.id
+                        // Defer by one run-loop tick so SwiftUI has finished laying
+                        // out this row at its new (much taller) height before we
+                        // scroll — otherwise scrollTo computes its target using the
+                        // row's stale, near-empty-placeholder height and the view
+                        // still lands close to the bottom. Same pattern already
+                        // used below for the keyboard-appearance and initial-render
+                        // scroll calls in this same file.
+                        DispatchQueue.main.async {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                // Slightly negative y instead of exact .top (y: 0) —
+                                // gives a little breathing room above the message
+                                // instead of landing it flush against the nav bar.
+                                proxy.scrollTo(lastMessage.id, anchor: UnitPoint(x: 0.5, y: -0.03))
+                            }
+                        }
+                    } else {
+                        scrollToBottom(proxy: proxy, animated: false)
+                    }
                 }
                 // Typing indicator toggled
                 .onChange(of: viewModel.isTyping) { _ in
@@ -83,6 +122,7 @@ struct ChatView: View {
                 }
                 // Session switched — instant jump, no animation
                 .onChange(of: viewModel.activeSessionID) { _ in
+                    lastSeenNonEmptyMessageID = nil
                     proxy.scrollTo(bottomAnchor, anchor: .bottom)
                 }
                 // Keyboard appeared — defer one frame so the layout has
