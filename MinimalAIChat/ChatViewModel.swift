@@ -62,12 +62,7 @@ final class ChatViewModel: ObservableObject {
         }
 
         // Always start with a fresh welcoming session on launch
-        let fresh = ChatSession(title: "新对话", messages: [
-            ChatMessage(
-                role: .assistant,
-                content: "你好！我是你的 AI 助手。今天想聊些什么？👋"
-            )
-        ])
+        let fresh = Self.makeFreshSession()
         loadedSessions.insert(fresh, at: 0)
         
         self.sessions = loadedSessions
@@ -158,12 +153,7 @@ final class ChatViewModel: ObservableObject {
         currentTask?.cancel()
         ProactiveChatManager.shared.cancelPending()
         isTyping = false
-        let session = ChatSession(title: "新对话", messages: [
-            ChatMessage(
-                role: .assistant,
-                content: "你好！我是你的 AI 助手。今天想聊些什么？👋"
-            )
-        ])
+        let session = Self.makeFreshSession()
         sessions.insert(session, at: 0)
         activeSessionID = session.id
         persistSessions()
@@ -407,6 +397,29 @@ final class ChatViewModel: ObservableObject {
     }
 
     // MARK: - Private Helpers
+
+    private static func makeFreshSession() -> ChatSession {
+        let userName = UserDefaults.standard.string(forKey: SettingsKey.userName) ?? "老师"
+        if let character = RoleplayCharacterManager.activeCharacter() {
+            let firstMessage = character.resolvedFirstMessage(userName: userName)
+            let greeting = firstMessage.isEmpty
+                ? "已进入“\(character.name)”的角色对话。"
+                : firstMessage
+            return ChatSession(
+                title: "\(character.name) · 新对话",
+                messages: [ChatMessage(role: .assistant, content: greeting)]
+            )
+        }
+        return ChatSession(
+            title: "新对话",
+            messages: [
+                ChatMessage(
+                    role: .assistant,
+                    content: "你好！我是你的 AI 助手。今天想聊些什么？👋"
+                )
+            ]
+        )
+    }
 
     /// Returns a subset of recent messages whose total character count fits within the budget.
     /// Guarantees that at least the single most recent message is included, regardless of length.

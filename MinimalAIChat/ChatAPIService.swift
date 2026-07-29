@@ -215,7 +215,10 @@ final class ChatAPIService {
         let savedName = UserDefaults.standard.string(forKey: "userName") ?? "User"
 
         // Dynamically replace the {name} placeholder with the actual saved name
-        let personalityContent = basePrompt.replacingOccurrences(of: "{name}", with: savedName)
+        var personalityContent = basePrompt.replacingOccurrences(of: "{name}", with: savedName)
+        if let roleplayPrompt = RoleplayCharacterManager.activePrompt(userName: savedName) {
+            personalityContent += "\n\n" + roleplayPrompt
+        }
 
         // Generate today's date string for temporal grounding.
         let dateFormatter = DateFormatter()
@@ -569,7 +572,10 @@ final class ChatAPIService {
                     }
 
                     let savedName = UserDefaults.standard.string(forKey: "userName") ?? "User"
-                    let personalityContent = basePrompt.replacingOccurrences(of: "{name}", with: savedName)
+                    var personalityContent = basePrompt.replacingOccurrences(of: "{name}", with: savedName)
+                    if let roleplayPrompt = RoleplayCharacterManager.activePrompt(userName: savedName) {
+                        personalityContent += "\n\n" + roleplayPrompt
+                    }
 
                     let dateFormatter = DateFormatter()
                     dateFormatter.dateStyle = .long

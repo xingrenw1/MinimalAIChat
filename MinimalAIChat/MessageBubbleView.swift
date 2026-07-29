@@ -221,18 +221,30 @@ struct MessageBubbleView: View {
 
 
     private var avatarView: some View {
-        ZStack {
-            Circle()
-                .fill(LinearGradient(
-                    colors: [Color.accentColor, Color.accentColor.opacity(0.55)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ))
-                .frame(width: 30, height: 30)
-            Image(systemName: "sparkles")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.white)
+        Group {
+            if let character = RoleplayCharacterManager.activeCharacter(),
+               let avatar = RoleplayCharacterManager.avatar(for: character) {
+                Image(uiImage: avatar)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 30, height: 30)
+                    .clipShape(Circle())
+            } else {
+                ZStack {
+                    Circle()
+                        .fill(LinearGradient(
+                            colors: [Color.accentColor, Color.accentColor.opacity(0.55)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ))
+                        .frame(width: 30, height: 30)
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+            }
         }
+        .frame(width: 30, height: 30)
     }
 
     // MARK: - Helpers

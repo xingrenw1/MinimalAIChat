@@ -28,6 +28,8 @@
 		B1000010 /* MasterSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000010 /* MasterSettingsView.swift */; };
 		B1000011 /* ProactiveChatManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000011 /* ProactiveChatManager.swift */; };
 		B1000012 /* AppearanceTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000012 /* AppearanceTheme.swift */; };
+		B1000013 /* RoleplayCharacter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000013 /* RoleplayCharacter.swift */; };
+		B1000014 /* RoleplaySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000014 /* RoleplaySettingsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -50,6 +52,8 @@
 		A1000010 /* MasterSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MasterSettingsView.swift; sourceTree = "<group>"; };
 		A1000011 /* ProactiveChatManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProactiveChatManager.swift; sourceTree = "<group>"; };
 		A1000012 /* AppearanceTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceTheme.swift; sourceTree = "<group>"; };
+		A1000013 /* RoleplayCharacter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoleplayCharacter.swift; sourceTree = "<group>"; };
+		A1000014 /* RoleplaySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoleplaySettingsView.swift; sourceTree = "<group>"; };
 		B9CF97E71F27DBE64250F07E /* ProfileImageManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProfileImageManager.swift; sourceTree = "<group>"; };
 		EA8E3C33851B909A4398FBF5 /* SystemImagePicker.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SystemImagePicker.swift; sourceTree = "<group>"; };
 		F59DA19A0CD95D93964B929B /* MinimalAIChat.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MinimalAIChat.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -85,6 +89,8 @@
 				A1000010 /* MasterSettingsView.swift */,
 				A1000011 /* ProactiveChatManager.swift */,
 				A1000012 /* AppearanceTheme.swift */,
+				A1000013 /* RoleplayCharacter.swift */,
+				A1000014 /* RoleplaySettingsView.swift */,
 				A1000009 /* Assets.xcassets */,
 				B9CF97E71F27DBE64250F07E /* ProfileImageManager.swift */,
 				EA8E3C33851B909A4398FBF5 /* SystemImagePicker.swift */,
@@ -195,6 +201,8 @@
 				B1000010 /* MasterSettingsView.swift in Sources */,
 				B1000011 /* ProactiveChatManager.swift in Sources */,
 				B1000012 /* AppearanceTheme.swift in Sources */,
+				B1000013 /* RoleplayCharacter.swift in Sources */,
+				B1000014 /* RoleplaySettingsView.swift in Sources */,
 				493ED043147BB4E1AA5EA9F1 /* ProfileImageManager.swift in Sources */,
 				4F948ADF1BBB6BE770860639 /* SystemImagePicker.swift in Sources */,
 				80AD6F85CDBEDF1E15CD59F8 /* TavilySearchService.swift in Sources */,

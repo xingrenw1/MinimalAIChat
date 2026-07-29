@@ -33,6 +33,17 @@ struct MasterSettingsView: View {
                         .padding(.vertical, 4)
                     }
 
+                    NavigationLink(destination: RoleplaySettingsView()) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "theatermasks")
+                                .font(.system(size: 20))
+                                .foregroundColor(.accentColor)
+                            Text("角色扮演与酒馆")
+                                .font(.system(size: 16))
+                        }
+                        .padding(.vertical, 4)
+                    }
+
                     NavigationLink(destination: ProactiveChatSettingsView()) {
                         HStack(spacing: 12) {
                             Image(systemName: "message.badge")
