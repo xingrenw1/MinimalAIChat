@@ -18,7 +18,7 @@ struct MasterSettingsView: View {
                             Image(systemName: "person.crop.circle")
                                 .font(.system(size: 20))
                                 .foregroundColor(.accentColor)
-                            Text("编辑个人资料")
+                            Text("双方名字与头像")
                                 .font(.system(size: 16))
                         }
                         .padding(.vertical, 4)
@@ -186,68 +186,129 @@ struct ProfileSettingsView: View {
     @AppStorage("userName") private var userName: String = ""
     @EnvironmentObject private var settings: SettingsViewModel
     @State private var showingImagePicker = false
+    @State private var imageTarget: IdentityImageTarget = .user
 
     var body: some View {
         Form {
             Section {
-                HStack {
-                    Spacer()
+                HStack(spacing: 18) {
                     Button {
+                        imageTarget = .user
                         showingImagePicker = true
                     } label: {
-                        ZStack {
-                            Circle()
-                                .fill(Color.accentColor.opacity(0.15))
-                                .frame(width: 80, height: 80)
-                            
-                            if let img = settings.profileImage {
-                                Image(uiImage: img)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 80, height: 80)
-                                    .clipShape(Circle())
-                            } else if userName.isEmpty {
-                                Image(systemName: "person")
-                                    .font(.system(size: 36, weight: .medium))
-                                    .foregroundColor(.accentColor)
-                            } else {
-                                Text(String(userName.prefix(1)).uppercased())
-                                    .font(.system(size: 36, weight: .bold))
-                                    .foregroundColor(.accentColor)
-                            }
-                            
-                            Circle()
-                                .stroke(Color.accentColor.opacity(0.3), lineWidth: 1)
-                                .frame(width: 80, height: 80)
-                        }
+                        IdentityAvatar(image: settings.profileImage, name: userName, fallbackIcon: "person")
                     }
                     .buttonStyle(.plain)
-                    Spacer()
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        TextField("例如：老师", text: $userName)
+                            .font(.system(size: 16))
+                        Text("点击头像可随时更换")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                        if settings.profileImage != nil {
+                            Button("移除头像") { settings.removeProfileImage() }
+                                .font(.system(size: 12))
+                                .foregroundColor(.red)
+                        }
+                    }
                 }
-                .listRowBackground(Color.clear)
                 .padding(.vertical, 10)
             } header: {
-                Text("头像")
+                Text("我的身份")
+            } footer: {
+                Text("你的名字会用于系统提示词、酒馆变量 {{user}} 和聊天界面。")
             }
 
             Section {
-                TextField("例如：老师", text: $userName)
-                    .font(.system(size: 16))
-                    .padding(.vertical, 4)
+                HStack(spacing: 18) {
+                    Button {
+                        imageTarget = .assistant
+                        showingImagePicker = true
+                    } label: {
+                        IdentityAvatar(
+                            image: settings.assistantImage,
+                            name: settings.assistantName,
+                            fallbackIcon: "sparkles"
+                        )
+                    }
+                    .buttonStyle(.plain)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        TextField("例如：白子", text: $settings.assistantName)
+                            .font(.system(size: 16))
+                        Text("点击头像可随时更换")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                        if settings.assistantImage != nil {
+                            Button("移除头像") { settings.removeAssistantImage() }
+                                .font(.system(size: 12))
+                                .foregroundColor(.red)
+                        }
+                    }
+                }
+                .padding(.vertical, 10)
             } header: {
-                Text("你的名字")
+                Text("对方身份")
             } footer: {
-                Text("用于个性化你的 AI 对话。")
+                Text("没有启用角色卡时使用这里的名字和头像；启用酒馆角色卡后，角色卡头像与角色名优先。")
             }
         }
-        .navigationTitle("编辑个人资料")
+        .navigationTitle("双方身份")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showingImagePicker) {
-            SystemImagePicker(selectedImage: Binding(get: { settings.profileImage }, set: { newImg in
-                if let newImg = newImg {
-                    settings.updateProfileImage(newImg)
+            SystemImagePicker(selectedImage: Binding(
+                get: {
+                    imageTarget == .user ? settings.profileImage : settings.assistantImage
+                },
+                set: { image in
+                    guard let image else { return }
+                    if imageTarget == .user {
+                        settings.updateProfileImage(image)
+                    } else {
+                        settings.updateAssistantImage(image)
+                    }
                 }
-            }))
+            ))
+        }
+    }
+}
+
+private enum IdentityImageTarget {
+    case user
+    case assistant
+}
+
+private struct IdentityAvatar: View {
+    let image: UIImage?
+    let name: String
+    let fallbackIcon: String
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(Color.accentColor.opacity(0.14))
+                .frame(width: 76, height: 76)
+
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 76, height: 76)
+                    .clipShape(Circle())
+            } else if !name.isEmpty {
+                Text(String(name.prefix(1)).uppercased())
+                    .font(.system(size: 30, weight: .bold))
+                    .foregroundColor(.accentColor)
+            } else {
+                Image(systemName: fallbackIcon)
+                    .font(.system(size: 29, weight: .medium))
+                    .foregroundColor(.accentColor)
+            }
+
+            Circle()
+                .stroke(Color.accentColor.opacity(0.32), lineWidth: 1)
+                .frame(width: 76, height: 76)
         }
     }
 }

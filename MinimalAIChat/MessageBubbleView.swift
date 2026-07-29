@@ -5,6 +5,7 @@ struct MessageBubbleView: View {
 
     let message: ChatMessage
     var isSearching: Bool = false
+    @EnvironmentObject private var settings: SettingsViewModel
 
     private var isUser: Bool { message.role == .user }
 
@@ -22,6 +23,11 @@ struct MessageBubbleView: View {
         HStack(alignment: .bottom, spacing: 0) {
             Spacer(minLength: 56)
             VStack(alignment: .trailing, spacing: 4) {
+                Text(settings.userName.isEmpty ? "我" : settings.userName)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.secondary)
+                    .padding(.trailing, 4)
+
                 if !message.attachments.isEmpty {
                     userAttachmentGrid
                 }
@@ -45,6 +51,9 @@ struct MessageBubbleView: View {
                     .opacity(0.7)
                     .padding(.trailing, 4)
             }
+
+            userAvatar
+                .padding(.leading, 8)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 3)
@@ -100,6 +109,10 @@ struct MessageBubbleView: View {
             avatarView
 
             VStack(alignment: .leading, spacing: 6) {
+                Text(assistantDisplayName)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.secondary)
+
                 if message.content.isEmpty {
                     if isSearching {
                         WebSearchIndicatorView()
@@ -277,6 +290,12 @@ struct MessageBubbleView: View {
                     .scaledToFill()
                     .frame(width: 30, height: 30)
                     .clipShape(Circle())
+            } else if let avatar = settings.assistantImage {
+                Image(uiImage: avatar)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 30, height: 30)
+                    .clipShape(Circle())
             } else {
                 ZStack {
                     Circle()
@@ -293,6 +312,33 @@ struct MessageBubbleView: View {
             }
         }
         .frame(width: 30, height: 30)
+    }
+
+    private var userAvatar: some View {
+        Group {
+            if let avatar = settings.profileImage {
+                Image(uiImage: avatar)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 30, height: 30)
+                    .clipShape(Circle())
+            } else {
+                ZStack {
+                    Circle()
+                        .fill(Color.accentColor.opacity(0.14))
+                        .frame(width: 30, height: 30)
+                    Text(String((settings.userName.isEmpty ? "我" : settings.userName).prefix(1)))
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.accentColor)
+                }
+            }
+        }
+        .frame(width: 30, height: 30)
+    }
+
+    private var assistantDisplayName: String {
+        RoleplayCharacterManager.activeCharacter()?.name
+            ?? (settings.assistantName.isEmpty ? "AI 助手" : settings.assistantName)
     }
 
     // MARK: - Helpers
@@ -408,11 +454,13 @@ struct WebSearchIndicatorView: View {
 
 struct MessageBubbleView_Previews: PreviewProvider {
     static var previews: some View {
+        let settings = SettingsViewModel()
         VStack(spacing: 12) {
             MessageBubbleView(message: ChatMessage(role: .assistant, content: "Hello! How can I help you today?"))
             MessageBubbleView(message: ChatMessage(role: .user, content: "Can you explain SwiftUI?"))
             MessageBubbleView(message: ChatMessage(role: .assistant, content: "Sure! SwiftUI is Apple's declarative UI framework, introduced in 2019. It lets you build beautiful user interfaces across all Apple platforms with very little code."))
         }
+        .environmentObject(settings)
         .padding()
         .previewLayout(.sizeThatFits)
     }

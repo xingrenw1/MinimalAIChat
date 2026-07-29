@@ -325,6 +325,11 @@ final class ChatAPIService {
         var personalityContent = basePrompt.replacingOccurrences(of: "{name}", with: savedName)
         if let roleplayPrompt = RoleplayCharacterManager.activePrompt(userName: savedName) {
             personalityContent += "\n\n" + roleplayPrompt
+        } else {
+            let assistantName = settings.assistantName.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !assistantName.isEmpty {
+                personalityContent += "\n\n你的对话名称是“\(assistantName)”。自然地使用这个身份与用户交流，不要解释这条设定。"
+            }
         }
 
         // Generate today's date string for temporal grounding.
@@ -682,6 +687,11 @@ final class ChatAPIService {
                     var personalityContent = basePrompt.replacingOccurrences(of: "{name}", with: savedName)
                     if let roleplayPrompt = RoleplayCharacterManager.activePrompt(userName: savedName) {
                         personalityContent += "\n\n" + roleplayPrompt
+                    } else {
+                        let assistantName = settings.assistantName.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !assistantName.isEmpty {
+                            personalityContent += "\n\n你的对话名称是“\(assistantName)”。自然地使用这个身份与用户交流，不要解释这条设定。"
+                        }
                     }
 
                     let dateFormatter = DateFormatter()

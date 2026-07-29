@@ -10,6 +10,7 @@ enum SettingsKey {
     static let modelName  = "settings.modelName"
     static let apiKey     = "settings.apiKey"        // stored in Keychain
     static let userName   = "userName"               // shared with @AppStorage
+    static let assistantName = "settings.assistantName"
     static let temperature = "settings.temperature"
     static let maxTokens   = "settings.maxTokens"
     static let historyCharacterBudget = "settings.historyCharacterBudget"
@@ -80,6 +81,10 @@ final class SettingsViewModel: ObservableObject {
     }
 
     @Published var profileImage: UIImage?
+    @Published var assistantName: String {
+        didSet { UserDefaults.standard.set(assistantName, forKey: SettingsKey.assistantName) }
+    }
+    @Published var assistantImage: UIImage?
     
     @Published var temperature: Double {
         didSet { UserDefaults.standard.set(temperature, forKey: SettingsKey.temperature) }
@@ -132,6 +137,21 @@ final class SettingsViewModel: ObservableObject {
         ProfileImageManager.save(image)
     }
 
+    func updateAssistantImage(_ image: UIImage) {
+        assistantImage = image
+        AssistantProfileImageManager.save(image)
+    }
+
+    func removeProfileImage() {
+        profileImage = nil
+        ProfileImageManager.remove()
+    }
+
+    func removeAssistantImage() {
+        assistantImage = nil
+        AssistantProfileImageManager.remove()
+    }
+
     // MARK: - Derived helpers
 
     /// Whether the minimum required configuration is present.
@@ -155,6 +175,8 @@ final class SettingsViewModel: ObservableObject {
         self.webSearchEnabled = defaults.object(forKey: SettingsKey.webSearchEnabled) as? Bool ?? true
         self.userName  = defaults.string(forKey: SettingsKey.userName)  ?? ""
         self.profileImage = ProfileImageManager.load()
+        self.assistantName = defaults.string(forKey: SettingsKey.assistantName) ?? "AI 助手"
+        self.assistantImage = AssistantProfileImageManager.load()
         self.temperature = defaults.object(forKey: SettingsKey.temperature) as? Double ?? SettingsDefault.temperature
         self.maxTokens   = defaults.object(forKey: SettingsKey.maxTokens) as? Int
         self.historyCharacterBudget = defaults.object(forKey: SettingsKey.historyCharacterBudget) as? Int ?? SettingsDefault.historyCharacterBudget
@@ -175,6 +197,7 @@ final class SettingsViewModel: ObservableObject {
         modelName = SettingsDefault.modelName
         apiKey    = ""
         KeychainHelper.shared.delete(forKey: SettingsKey.apiKey)
+        assistantName = "AI 助手"
         proactiveEnabled = false
         proactiveMinimumMinutes = SettingsDefault.proactiveMinimumMinutes
         proactiveMaximumMinutes = SettingsDefault.proactiveMaximumMinutes
