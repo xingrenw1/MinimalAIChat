@@ -1,0 +1,75 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/cross-platform
+    paths:
+      - "CrossPlatform/**"
+      - ".github/workflows/build-android-apk.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generate Android platform files
+        run: |
+          flutter create \
+            --platforms=android \
+            --org com.xingrenw1 \
+            --project-name minimal_ai_chat \
+            "$RUNNER_TEMP/minimal_ai_chat"
+          cp -R "$RUNNER_TEMP/minimal_ai_chat/android" CrossPlatform/android
+          sed -i '/<application/i\    <uses-permission android:name="android.permission.INTERNET"/>' CrossPlatform/android/app/src/main/AndroidManifest.xml
+          sed -i 's/android:label="minimal_ai_chat"/android:label="MinimalAIChat"/' CrossPlatform/android/app/src/main/AndroidManifest.xml
+
+      - name: Resolve dependencies
+        working-directory: CrossPlatform
+        run: flutter pub get
+
+      - name: Analyze
+        working-directory: CrossPlatform
+        run: flutter analyze
+
+      - name: Build release APK
+        working-directory: CrossPlatform
+        run: flutter build apk --release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MinimalAIChat-Android-${{ github.run_number }}
+          path: CrossPlatform/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-build-diagnostics-${{ github.run_number }}
+          path: |
+            CrossPlatform/.dart_tool/
+            CrossPlatform/pubspec.lock
+          if-no-files-found: ignore
