@@ -33,6 +33,17 @@ struct MasterSettingsView: View {
                         .padding(.vertical, 4)
                     }
 
+                    NavigationLink(destination: ProactiveChatSettingsView()) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "message.badge.waveform")
+                                .font(.system(size: 20))
+                                .foregroundColor(.accentColor)
+                            Text("主动聊天与通知")
+                                .font(.system(size: 16))
+                        }
+                        .padding(.vertical, 4)
+                    }
+
                     NavigationLink(destination: SettingsView()) {
                         HStack(spacing: 12) {
                             Image(systemName: "network")
@@ -43,7 +54,7 @@ struct MasterSettingsView: View {
                         }
                         .padding(.vertical, 4)
                     }
-                    
+
                     NavigationLink(destination: AboutView()) {
                         HStack(spacing: 12) {
                             Image(systemName: "info.circle")
@@ -94,7 +105,7 @@ struct ProfileSettingsView: View {
                             Circle()
                                 .fill(Color.accentColor.opacity(0.15))
                                 .frame(width: 80, height: 80)
-                            
+
                             if let img = settings.profileImage {
                                 Image(uiImage: img)
                                     .resizable()
@@ -110,7 +121,7 @@ struct ProfileSettingsView: View {
                                     .font(.system(size: 36, weight: .bold))
                                     .foregroundColor(.accentColor)
                             }
-                            
+
                             Circle()
                                 .stroke(Color.accentColor.opacity(0.3), lineWidth: 1)
                                 .frame(width: 80, height: 80)
@@ -162,7 +173,7 @@ struct PromptSettingsView: View {
                     .frame(minHeight: 150)
                     .font(.system(size: 16))
                     .padding(.vertical, 4)
-                
+
                 Button(action: {
                     showResetAlert = true
                 }) {
@@ -201,12 +212,100 @@ struct PromptSettingsView: View {
     }
 }
 
+// MARK: - ProactiveChatSettingsView
+
+/// Configures AI-generated local notifications that can begin a conversation
+/// without waiting for the user to send another message.
+struct ProactiveChatSettingsView: View {
+
+    @EnvironmentObject private var settings: SettingsViewModel
+    @EnvironmentObject private var viewModel: ChatViewModel
+
+    private let intervals = [30, 60, 120, 240, 480, 720]
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("启用主动聊天", isOn: $settings.proactiveChatEnabled)
+            } header: {
+                Text("主动消息")
+            } footer: {
+                Text("开启后，应用会在前台根据当前角色和最近聊天生成下一条消息，再由 iOS 在设定时间发送本地通知。")
+            }
+
+            if settings.proactiveChatEnabled {
+                Section {
+                    Picker("消息语言", selection: $settings.proactiveLanguage) {
+                        Text("中文").tag("zh-Hans")
+                        Text("English").tag("en")
+                    }
+
+                    Picker("等待时间", selection: $settings.proactiveIntervalMinutes) {
+                        ForEach(intervals, id: \.self) { minutes in
+                            Text(intervalLabel(minutes)).tag(minutes)
+                        }
+                    }
+                } header: {
+                    Text("生成设置")
+                } footer: {
+                    Text("修改语言或时间后，可点下方按钮立即替换已经安排的下一条消息。")
+                }
+
+                Section {
+                    Button {
+                        ProactiveChatManager.shared.regenerateNextMessage(
+                            settings: settings,
+                            viewModel: viewModel
+                        )
+                    } label: {
+                        HStack {
+                            Image(systemName: "arrow.clockwise")
+                            Text("重新生成下一条主动消息")
+                        }
+                    }
+                }
+
+                Section {
+                    Label("消息使用当前 AI 人设", systemImage: "person.text.rectangle")
+                    Label("会参考最近十条聊天", systemImage: "text.bubble")
+                    Label("退出应用后由系统通知送达", systemImage: "bell")
+                } header: {
+                    Text("工作方式")
+                } footer: {
+                    Text("受 iOS 后台限制，AI 内容必须在应用处于前台时预先生成；不需要额外服务器。")
+                }
+            }
+        }
+        .navigationTitle("主动聊天")
+        .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: settings.proactiveChatEnabled) { enabled in
+            if enabled {
+                ProactiveChatManager.shared.handleActivation(
+                    settings: settings,
+                    viewModel: viewModel
+                )
+            } else {
+                ProactiveChatManager.shared.cancelPendingMessage()
+            }
+        }
+    }
+
+    private func intervalLabel(_ minutes: Int) -> String {
+        if minutes < 60 {
+            return "\(minutes) 分钟"
+        }
+        let hours = minutes / 60
+        return "\(hours) 小时"
+    }
+}
+
 // MARK: - Preview
 
 struct MasterSettingsView_Previews: PreviewProvider {
     static var previews: some View {
         MasterSettingsView()
             .environmentObject(SettingsViewModel())
+            .environmentObject(ChatViewModel(settings: SettingsViewModel()))
     }
 }
 
