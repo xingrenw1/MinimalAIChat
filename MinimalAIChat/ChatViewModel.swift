@@ -85,6 +85,16 @@ final class ChatViewModel: ObservableObject {
     /// with the real shared instance.
     func configure(settings: SettingsViewModel) {
         self.settings = settings
+        ProactiveChatManager.shared.configure(
+            settingsProvider: { [weak self] in self?.settings },
+            generator: { [weak self] in
+                guard let self else { return nil }
+                return try await self.generateProactiveMessage()
+            },
+            deliveryHandler: { [weak self] sessionID, content in
+                self?.deliverProactiveMessage(content, to: sessionID)
+            }
+        )
     }
 
     // MARK: - Computed Helpers
@@ -112,6 +122,7 @@ final class ChatViewModel: ObservableObject {
         guard !text.isEmpty, !isTyping else { return }
 
         inputText = ""
+        ProactiveChatManager.shared.cancelPending()
         appendMessage(ChatMessage(role: .user, content: text))
 
         // Cancel any stale in-flight request before starting a new one
@@ -124,6 +135,7 @@ final class ChatViewModel: ObservableObject {
     /// Retries the last user request (or re-attempts after an error or interrupted stream).
     func retryLastReply() {
         guard canRetry else { return }
+        ProactiveChatManager.shared.cancelPending()
 
         if let lastMsg = activeMessages.last, lastMsg.role == .assistant {
             // Remove both error bubbles AND incomplete partial replies before retrying
@@ -144,6 +156,7 @@ final class ChatViewModel: ObservableObject {
     /// Creates and activates a brand-new chat session, cancelling any in-flight request.
     func startNewChat() {
         currentTask?.cancel()
+        ProactiveChatManager.shared.cancelPending()
         isTyping = false
         let session = ChatSession(title: "New Chat", messages: [
             ChatMessage(
@@ -159,8 +172,10 @@ final class ChatViewModel: ObservableObject {
     /// Switches to an existing session, cancelling any in-flight request.
     func selectSession(_ session: ChatSession) {
         currentTask?.cancel()
+        ProactiveChatManager.shared.cancelPending()
         isTyping = false
         activeSessionID = session.id
+        Task { await ProactiveChatManager.shared.activate() }
     }
 
     /// Deletes the active session entirely and switches to the next available one.
@@ -185,6 +200,14 @@ final class ChatViewModel: ObservableObject {
     /// Cancels any in-flight API request. Call this when backgrounding the app.
     func cancelInFlightTask() {
         currentTask?.cancel()
+    }
+
+    func activateProactiveChat() async {
+        await ProactiveChatManager.shared.activate()
+    }
+
+    func proactiveSettingsDidChange() async {
+        await ProactiveChatManager.shared.settingsDidChange()
     }
 
     /// Dismisses the current error alert (called from the view's alert handler).
@@ -243,6 +266,7 @@ final class ChatViewModel: ObservableObject {
 
                 persistSessions()
                 isStreamingActive = false
+                await ProactiveChatManager.shared.conversationDidChange()
 
             } catch APIError.cancelled {
                 isTyping = false
@@ -328,6 +352,7 @@ final class ChatViewModel: ObservableObject {
                 // Final cleanup for the clean-finish case
                 cleanupPartialMessage(messageID: messageID, inSession: sessionIDAtDispatch, wasCancelled: false)
                 isStreamingActive = false
+                await ProactiveChatManager.shared.conversationDidChange()
 
             } catch APIError.cancelled {
                 // Silently swallow cancellations — the user switched sessions or view
@@ -422,6 +447,32 @@ final class ChatViewModel: ObservableObject {
         }
 
         persistSessions()
+    }
+
+    private func generateProactiveMessage() async throws -> PreparedProactiveMessage? {
+        guard settings.proactiveEnabled, !isTyping, !isStreamingActive,
+              let session = activeSession,
+              session.messages.contains(where: { $0.role == .user }) else { return nil }
+
+        let instruction = settings.proactivePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !instruction.isEmpty else { return nil }
+
+        var context = trimmedHistory(from: session.messages.filter { !$0.isError && $0.isComplete })
+        context.append(ChatMessage(role: .system, content: "主动消息任务：\n\(instruction)"))
+
+        let text = try await apiService.sendChatCompletion(
+            messages: context,
+            settings: settings,
+            allowTools: false
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !text.isEmpty else { return nil }
+        return PreparedProactiveMessage(sessionID: session.id, content: text)
+    }
+
+    private func deliverProactiveMessage(_ content: String, to sessionID: UUID) {
+        guard sessions.contains(where: { $0.id == sessionID }) else { return }
+        appendMessage(ChatMessage(role: .assistant, content: content), toSession: sessionID)
     }
 
     // MARK: - Persistence

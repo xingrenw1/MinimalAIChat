@@ -1,5 +1,13 @@
 # MinimalAIChat
 
+## Proactive chat (feature branch)
+
+The `feature/proactive-chat-ipa` branch adds an in-app Chinese settings page for proactive character messages, configurable random intervals and quiet hours, local notifications, and automatic insertion into the original chat history.
+
+Because iOS does not guarantee arbitrary background network execution, the next message is generated while the app is active and saved locally before its notification is scheduled. If the app is not running when the notification fires, the saved message is inserted into chat history the next time the app becomes active.
+
+GitHub Actions builds an unsigned device IPA on every push to the feature branch. Download the `MinimalAIChat-unsigned-*` artifact from the workflow run and sign or sideload it with your preferred tool.
+
 A native iOS 15 AI chat client designed to bring modern artificial intelligence capabilities back to legacy Apple devices.
 
 <p align="center">

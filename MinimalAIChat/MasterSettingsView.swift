@@ -33,6 +33,17 @@ struct MasterSettingsView: View {
                         .padding(.vertical, 4)
                     }
 
+                    NavigationLink(destination: ProactiveChatSettingsView()) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "message.badge")
+                                .font(.system(size: 20))
+                                .foregroundColor(.accentColor)
+                            Text("主动聊天")
+                                .font(.system(size: 16))
+                        }
+                        .padding(.vertical, 4)
+                    }
+
                     NavigationLink(destination: SettingsView()) {
                         HStack(spacing: 12) {
                             Image(systemName: "network")
@@ -198,6 +209,102 @@ struct PromptSettingsView: View {
         }
         .navigationTitle("AI Personality")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+// MARK: - ProactiveChatSettingsView
+
+struct ProactiveChatSettingsView: View {
+    @EnvironmentObject private var settings: SettingsViewModel
+    @EnvironmentObject private var chatViewModel: ChatViewModel
+    @ObservedObject private var manager = ProactiveChatManager.shared
+
+    private let hourOptions = Array(0..<24)
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("启用主动聊天", isOn: $settings.proactiveEnabled)
+                    .onChange(of: settings.proactiveEnabled) { _ in
+                        Task { await chatViewModel.proactiveSettingsDidChange() }
+                    }
+            } footer: {
+                Text("开启后，应用会在前台预先生成下一条角色消息，并在随机时间通过本地通知发送。消息到期后会自动写入对应聊天记录。")
+            }
+
+            Section {
+                Stepper("最短间隔：\(settings.proactiveMinimumMinutes) 分钟", value: $settings.proactiveMinimumMinutes, in: 5...1440, step: 5)
+                Stepper("最长间隔：\(settings.proactiveMaximumMinutes) 分钟", value: $settings.proactiveMaximumMinutes, in: 5...2880, step: 5)
+            } header: {
+                Text("发送间隔")
+            } footer: {
+                Text("系统会在最短与最长间隔之间随机选择时间。若最短值大于最长值，应用会自动按较小值到较大值计算。")
+            }
+
+            Section {
+                Picker("安静时段开始", selection: $settings.proactiveQuietStartHour) {
+                    ForEach(hourOptions, id: \.self) { hour in
+                        Text(String(format: "%02d:00", hour)).tag(hour)
+                    }
+                }
+                Picker("安静时段结束", selection: $settings.proactiveQuietEndHour) {
+                    ForEach(hourOptions, id: \.self) { hour in
+                        Text(String(format: "%02d:00", hour)).tag(hour)
+                    }
+                }
+            } header: {
+                Text("安静时段")
+            } footer: {
+                Text("开始与结束相同表示不启用安静时段。跨午夜时段会自动处理。")
+            }
+
+            Section {
+                TextField("通知标题", text: $settings.proactiveNotificationTitle)
+                TextEditor(text: $settings.proactivePrompt)
+                    .frame(minHeight: 160)
+
+                Button("恢复默认主动消息提示词") {
+                    settings.proactivePrompt = SettingsDefault.proactivePrompt
+                }
+                .foregroundColor(.red)
+            } header: {
+                Text("角色主动消息")
+            } footer: {
+                Text("提示词会与当前角色设定和聊天记录一起发送给当前 API。默认要求模型只使用中文输出。")
+            }
+
+            Section {
+                if manager.isPreparing {
+                    HStack {
+                        ProgressView()
+                        Text("正在准备下一条主动消息…")
+                    }
+                } else if let date = manager.nextDeliveryDate {
+                    HStack {
+                        Text("下一条消息")
+                        Spacer()
+                        Text(date, style: .date)
+                        Text(date, style: .time)
+                            .foregroundColor(.secondary)
+                    }
+                } else {
+                    Text(settings.proactiveEnabled ? "需要先在当前会话中发送至少一条用户消息。" : "主动聊天已关闭。")
+                        .foregroundColor(.secondary)
+                }
+
+                if let error = manager.lastPreparationError {
+                    Text("准备失败：\(error)")
+                        .foregroundColor(.red)
+                }
+            } header: {
+                Text("状态")
+            }
+        }
+        .navigationTitle("主动聊天")
+        .navigationBarTitleDisplayMode(.inline)
+        .onDisappear {
+            Task { await chatViewModel.proactiveSettingsDidChange() }
+        }
     }
 }
 

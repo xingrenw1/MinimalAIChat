@@ -187,6 +187,7 @@ final class ChatAPIService {
     func sendChatCompletion(
         messages: [ChatMessage],
         settings: SettingsViewModel,
+        allowTools: Bool = true,
         onSearchStarted: (@Sendable () -> Void)? = nil
     ) async throws -> String {
 
@@ -233,7 +234,7 @@ final class ChatAPIService {
         let userMessages  = messages.map { APIMessage(role: $0.role.rawValue, content: $0.content) }
         let apiMessages   = [systemMessage] + userMessages
 
-        let toolsToSend: [ToolDefinition]? = settings.hasTavilyKey ? [ToolDefinition.webSearch] : nil
+        let toolsToSend: [ToolDefinition]? = allowTools && settings.hasTavilyKey ? [ToolDefinition.webSearch] : nil
 
         let body = ChatCompletionRequest(
             model: model,

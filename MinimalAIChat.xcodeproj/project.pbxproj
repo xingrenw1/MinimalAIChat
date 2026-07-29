@@ -26,6 +26,7 @@
 		B100000D /* ChatAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000D /* ChatAPIService.swift */; };
 		B100000E /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000E /* OnboardingView.swift */; };
 		B1000010 /* MasterSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000010 /* MasterSettingsView.swift */; };
+		B1000011 /* ProactiveChatManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000011 /* ProactiveChatManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -46,6 +47,7 @@
 		A100000D /* ChatAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatAPIService.swift; sourceTree = "<group>"; };
 		A100000E /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		A1000010 /* MasterSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MasterSettingsView.swift; sourceTree = "<group>"; };
+		A1000011 /* ProactiveChatManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProactiveChatManager.swift; sourceTree = "<group>"; };
 		B9CF97E71F27DBE64250F07E /* ProfileImageManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProfileImageManager.swift; sourceTree = "<group>"; };
 		EA8E3C33851B909A4398FBF5 /* SystemImagePicker.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SystemImagePicker.swift; sourceTree = "<group>"; };
 		F59DA19A0CD95D93964B929B /* MinimalAIChat.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MinimalAIChat.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -79,6 +81,7 @@
 				A100000D /* ChatAPIService.swift */,
 				A100000E /* OnboardingView.swift */,
 				A1000010 /* MasterSettingsView.swift */,
+				A1000011 /* ProactiveChatManager.swift */,
 				A1000009 /* Assets.xcassets */,
 				B9CF97E71F27DBE64250F07E /* ProfileImageManager.swift */,
 				EA8E3C33851B909A4398FBF5 /* SystemImagePicker.swift */,
@@ -187,6 +190,7 @@
 				B100000D /* ChatAPIService.swift in Sources */,
 				B100000E /* OnboardingView.swift in Sources */,
 				B1000010 /* MasterSettingsView.swift in Sources */,
+				B1000011 /* ProactiveChatManager.swift in Sources */,
 				493ED043147BB4E1AA5EA9F1 /* ProfileImageManager.swift in Sources */,
 				4F948ADF1BBB6BE770860639 /* SystemImagePicker.swift in Sources */,
 				80AD6F85CDBEDF1E15CD59F8 /* TavilySearchService.swift in Sources */,

@@ -90,6 +90,9 @@ private struct RootView: View {
             // Wire the real settings into the view model now that both
             // objects are fully injected into the environment.
             viewModel.configure(settings: settings)
+            Task {
+                await viewModel.activateProactiveChat()
+            }
 
             // Defer the reveal one frame so SwiftUI finishes committing
             // all @StateObject values before the real UI appears.
@@ -100,6 +103,10 @@ private struct RootView: View {
         .onChange(of: scenePhase) { newPhase in
             if newPhase == .background {
                 viewModel.cancelInFlightTask()
+            } else if newPhase == .active {
+                Task {
+                    await viewModel.activateProactiveChat()
+                }
             }
         }
     }
