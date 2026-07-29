@@ -91,6 +91,13 @@ private struct RootView: View {
             // objects are fully injected into the environment.
             viewModel.configure(settings: settings)
 
+            // Import a due proactive message, then prepare the next local
+            // notification while the app is allowed to perform network work.
+            ProactiveChatManager.shared.handleActivation(
+                settings: settings,
+                viewModel: viewModel
+            )
+
             // Defer the reveal one frame so SwiftUI finishes committing
             // all @StateObject values before the real UI appears.
             DispatchQueue.main.async {
@@ -98,8 +105,16 @@ private struct RootView: View {
             }
         }
         .onChange(of: scenePhase) { newPhase in
-            if newPhase == .background {
+            switch newPhase {
+            case .active:
+                ProactiveChatManager.shared.handleActivation(
+                    settings: settings,
+                    viewModel: viewModel
+                )
+            case .background:
                 viewModel.cancelInFlightTask()
+            default:
+                break
             }
         }
     }
