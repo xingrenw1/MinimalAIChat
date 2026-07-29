@@ -13,6 +13,12 @@ struct SettingsView: View {
     @State private var showSavedBanner: Bool = false
     /// Controls the reset confirmation alert
     @State private var showResetAlert: Bool = false
+    @State private var availableModels: [AvailableModel] = []
+    @State private var isLoadingModels: Bool = false
+    @State private var showModelPicker: Bool = false
+    @State private var showCustomModelSheet: Bool = false
+    @State private var customModelID: String = ""
+    @State private var modelListError: String? = nil
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -47,6 +53,21 @@ struct SettingsView: View {
                 },
                 secondaryButton: .cancel()
             )
+        }
+        .sheet(isPresented: $showModelPicker) {
+            ModelPickerView(models: availableModels, selectedModel: $settings.modelName)
+        }
+        .sheet(isPresented: $showCustomModelSheet) {
+            CustomModelView(modelID: $customModelID) {
+                let value = customModelID.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !value.isEmpty {
+                    settings.modelName = value
+                    flashSavedBanner()
+                }
+                showCustomModelSheet = false
+            } onCancel: {
+                showCustomModelSheet = false
+            }
         }
     }
 
@@ -91,6 +112,36 @@ struct SettingsView: View {
                     .disableAutocorrection(true)
                     .font(.system(size: 15, design: .monospaced))
                     .onChange(of: settings.modelName) { _ in flashSavedBanner() }
+
+                HStack(spacing: 8) {
+                    modelActionButton(
+                        title: isLoadingModels ? "正在获取" : "获取列表",
+                        icon: isLoadingModels ? "hourglass" : "arrow.triangle.2.circlepath"
+                    ) {
+                        fetchModelList()
+                    }
+                    .disabled(isLoadingModels)
+
+                    modelActionButton(title: "新建", icon: "plus") {
+                        customModelID = ""
+                        showCustomModelSheet = true
+                    }
+
+                    modelActionButton(title: "重置", icon: "arrow.counterclockwise") {
+                        settings.modelName = settings.baseURL.lowercased().contains("openrouter")
+                            ? "openrouter/auto"
+                            : SettingsDefault.modelName
+                        flashSavedBanner()
+                    }
+                }
+                .padding(.top, 6)
+
+                if let modelListError {
+                    Text(modelListError)
+                        .font(.system(size: 12))
+                        .foregroundColor(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
                 Text("示例：gpt-4o-mini · claude-3-haiku · llama3 · mistral")
                     .font(.system(size: 12))
@@ -217,6 +268,42 @@ struct SettingsView: View {
         Circle()
             .fill(on ? Color.green : Color.orange)
             .frame(width: 10, height: 10)
+    }
+
+    private func modelActionButton(title: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon)
+                .font(.system(size: 12, weight: .medium))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(Color.accentColor.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func fetchModelList() {
+        isLoadingModels = true
+        modelListError = nil
+
+        Task {
+            do {
+                let models = try await ModelCatalogService.shared.fetchModels(
+                    baseURL: settings.baseURL,
+                    apiKey: settings.apiKey
+                )
+                await MainActor.run {
+                    availableModels = models
+                    isLoadingModels = false
+                    showModelPicker = true
+                }
+            } catch {
+                await MainActor.run {
+                    isLoadingModels = false
+                    modelListError = error.localizedDescription
+                }
+            }
+        }
     }
 
     /// Shows the "Saved" banner briefly then hides it.
@@ -388,6 +475,258 @@ struct AdvancedSettingsView: View {
                 secondaryButton: .cancel()
             )
         }
+    }
+}
+
+// MARK: - Model Catalog
+
+struct AvailableModel: Decodable, Identifiable, Hashable {
+    struct Pricing: Decodable, Hashable {
+        let prompt: String?
+        let completion: String?
+    }
+
+    struct Provider: Decodable, Hashable {
+        let isModerated: Bool?
+
+        enum CodingKeys: String, CodingKey {
+            case isModerated = "is_moderated"
+        }
+    }
+
+    let id: String
+    let name: String?
+    let description: String?
+    let contextLength: Int?
+    let pricing: Pricing?
+    let supportedParameters: [String]?
+    let topProvider: Provider?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, description, pricing
+        case contextLength = "context_length"
+        case supportedParameters = "supported_parameters"
+        case topProvider = "top_provider"
+    }
+
+    var displayName: String {
+        let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? id : trimmed
+    }
+
+    var contextDescription: String? {
+        guard let contextLength else { return nil }
+        if contextLength >= 1_000_000 {
+            return String(format: "%.1fM 上下文", Double(contextLength) / 1_000_000)
+        }
+        if contextLength >= 1_000 {
+            return String(format: "%.0fK 上下文", Double(contextLength) / 1_000)
+        }
+        return "\(contextLength) 上下文"
+    }
+
+    var priceDescription: String? {
+        guard let pricing else { return nil }
+        let prompt = pricing.prompt.flatMap(Double.init).map { $0 * 1_000_000 }
+        let completion = pricing.completion.flatMap(Double.init).map { $0 * 1_000_000 }
+
+        if prompt == 0, completion == 0 {
+            return "免费"
+        }
+        guard prompt != nil || completion != nil else { return nil }
+        let inputText = prompt.map { Self.priceString($0) } ?? "—"
+        let outputText = completion.map { Self.priceString($0) } ?? "—"
+        return "输入 $\(inputText) / 输出 $\(outputText)（每百万 Token）"
+    }
+
+    private static func priceString(_ value: Double) -> String {
+        if value == 0 { return "0" }
+        if value < 0.01 { return String(format: "%.4f", value) }
+        if value < 1 { return String(format: "%.3f", value) }
+        return String(format: "%.2f", value)
+    }
+}
+
+private struct ModelCatalogResponse: Decodable {
+    let data: [AvailableModel]
+}
+
+private enum ModelCatalogError: LocalizedError {
+    case invalidURL
+    case httpError(Int, String)
+    case emptyList
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidURL:
+            return "无法生成模型列表地址，请检查 API 基础地址。"
+        case .httpError(let code, let message):
+            return "获取模型列表失败（HTTP \(code)）：\(message)"
+        case .emptyList:
+            return "接口没有返回可用模型。"
+        }
+    }
+}
+
+private final class ModelCatalogService {
+    static let shared = ModelCatalogService()
+    private init() {}
+
+    func fetchModels(baseURL: String, apiKey: String) async throws -> [AvailableModel] {
+        let trimmedBase = baseURL
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !trimmedBase.isEmpty, let url = URL(string: trimmedBase + "/models") else {
+            throw ModelCatalogError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !key.isEmpty {
+            request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        }
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            let message = Self.serverMessage(from: data)
+            throw ModelCatalogError.httpError(http.statusCode, message)
+        }
+
+        let result = try JSONDecoder().decode(ModelCatalogResponse.self, from: data)
+        guard !result.data.isEmpty else { throw ModelCatalogError.emptyList }
+        return result.data.sorted {
+            $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
+        }
+    }
+
+    private static func serverMessage(from data: Data) -> String {
+        struct ErrorBody: Decodable {
+            struct Detail: Decodable { let message: String? }
+            let error: Detail?
+        }
+        if let decoded = try? JSONDecoder().decode(ErrorBody.self, from: data),
+           let message = decoded.error?.message {
+            return message
+        }
+        return String(data: data, encoding: .utf8).map { String($0.prefix(160)) } ?? "未知错误"
+    }
+}
+
+private struct ModelPickerView: View {
+    let models: [AvailableModel]
+    @Binding var selectedModel: String
+    @Environment(\.presentationMode) private var presentationMode
+    @State private var searchText: String = ""
+
+    private var filteredModels: [AvailableModel] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return models }
+        return models.filter {
+            $0.id.localizedCaseInsensitiveContains(query) ||
+            $0.displayName.localizedCaseInsensitiveContains(query) ||
+            ($0.description?.localizedCaseInsensitiveContains(query) ?? false)
+        }
+    }
+
+    var body: some View {
+        NavigationView {
+            List(filteredModels) { model in
+                Button {
+                    selectedModel = model.id
+                    presentationMode.wrappedValue.dismiss()
+                } label: {
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(model.displayName)
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(.primary)
+                            Spacer()
+                            if selectedModel == model.id {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.accentColor)
+                            }
+                        }
+
+                        Text(model.id)
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundColor(.accentColor)
+                            .textSelection(.enabled)
+
+                        HStack(spacing: 8) {
+                            if let context = model.contextDescription {
+                                Text(context)
+                            }
+                            if let price = model.priceDescription {
+                                Text(price)
+                            }
+                        }
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+
+                        if let description = model.description, !description.isEmpty {
+                            Text(description)
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                                .lineLimit(3)
+                        }
+
+                        if let moderated = model.topProvider?.isModerated {
+                            Text(moderated ? "提供商标记：有内容审核" : "提供商标记：未启用内容审核")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(moderated ? .orange : .green)
+                        }
+                    }
+                    .padding(.vertical, 5)
+                }
+                .buttonStyle(.plain)
+            }
+            .searchable(text: $searchText, prompt: "搜索名称、模型 ID 或描述")
+            .navigationTitle("选择模型（\(filteredModels.count)）")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("关闭") { presentationMode.wrappedValue.dismiss() }
+                }
+            }
+        }
+        .navigationViewStyle(.stack)
+    }
+}
+
+private struct CustomModelView: View {
+    @Binding var modelID: String
+    let onSave: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section {
+                    TextField("例如：nousresearch/hermes-4-70b", text: $modelID)
+                        .autocapitalization(.none)
+                        .disableAutocorrection(true)
+                        .font(.system(size: 14, design: .monospaced))
+                } header: {
+                    Text("模型 ID")
+                } footer: {
+                    Text("填写提供商要求的完整模型 ID。OpenRouter 通常使用“作者/模型名”格式。")
+                }
+            }
+            .navigationTitle("新建自定义模型")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("取消", action: onCancel)
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("保存", action: onSave)
+                        .disabled(modelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+        .navigationViewStyle(.stack)
     }
 }
 
