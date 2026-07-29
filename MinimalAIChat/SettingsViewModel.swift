@@ -148,7 +148,6 @@ final class SettingsViewModel: ObservableObject {
         proactiveChatEnabled = false
         proactiveIntervalMinutes = SettingsDefault.proactiveIntervalMinutes
         proactiveLanguage = SettingsDefault.proactiveLanguage
-        ProactiveChatManager.shared.cancelPendingMessage()
     }
 }
 
