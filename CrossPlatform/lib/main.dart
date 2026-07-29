@@ -512,7 +512,9 @@ class _ModelLibrarySheetState extends State<ModelLibrarySheet> {
                         try {
                           online = await ApiService.fetchOpenRouterModels();
                         } catch (error) {
-                          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+                          }
                         }
                         if (mounted) setState(() => loading = false);
                       },
