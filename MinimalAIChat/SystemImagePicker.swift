@@ -3,13 +3,14 @@ import UIKit
 
 struct SystemImagePicker: UIViewControllerRepresentable {
     @Binding var selectedImage: UIImage?
+    var allowsEditing: Bool = true
     @Environment(\.presentationMode) private var presentationMode
 
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
         picker.delegate = context.coordinator
         picker.sourceType = .photoLibrary
-        picker.allowsEditing = true
+        picker.allowsEditing = allowsEditing
         return picker
     }
 

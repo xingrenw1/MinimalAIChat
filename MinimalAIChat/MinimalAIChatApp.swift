@@ -72,6 +72,8 @@ private struct RootView: View {
 
     @EnvironmentObject private var settings: SettingsViewModel
     @EnvironmentObject private var viewModel: ChatViewModel
+    @AppStorage(AppearanceSettingsKey.theme) private var themeRawValue = AppTheme.ocean.rawValue
+    @AppStorage(AppearanceSettingsKey.colorScheme) private var colorSchemeRawValue = AppColorScheme.system.rawValue
 
     @Environment(\.scenePhase) private var scenePhase
     @State private var isReady = false
@@ -86,6 +88,8 @@ private struct RootView: View {
                     .ignoresSafeArea()
             }
         }
+        .accentColor((AppTheme(rawValue: themeRawValue) ?? .ocean).accentColor)
+        .preferredColorScheme((AppColorScheme(rawValue: colorSchemeRawValue) ?? .system).preferredColorScheme)
         .onAppear {
             // Wire the real settings into the view model now that both
             // objects are fully injected into the environment.

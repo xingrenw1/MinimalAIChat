@@ -6,6 +6,11 @@ struct ChatView: View {
 
     @EnvironmentObject private var viewModel: ChatViewModel
     @Binding var isMenuOpen: Bool
+    @AppStorage(AppearanceSettingsKey.backgroundEnabled) private var backgroundEnabled = true
+    @AppStorage(AppearanceSettingsKey.backgroundOpacity) private var backgroundOpacity = 0.32
+    @AppStorage(AppearanceSettingsKey.backgroundBlur) private var backgroundBlur = 0.0
+    @AppStorage(AppearanceSettingsKey.backgroundRevision) private var backgroundRevision = 0
+    @State private var customBackgroundImage = ChatBackgroundImageManager.load()
 
     // Scroll proxy anchor
     private let bottomAnchor = "BOTTOM_ANCHOR"
@@ -22,11 +27,14 @@ struct ChatView: View {
     @State private var lastSeenNonEmptyMessageID: UUID? = nil
 
     var body: some View {
-        VStack(spacing: 0) {
+        ZStack {
+            chatBackground
 
-            // ── Message List ──────────────────────────────────────────────
-            ScrollViewReader { proxy in
-                ScrollView {
+            VStack(spacing: 0) {
+
+                // ── Message List ──────────────────────────────────────────────
+                ScrollViewReader { proxy in
+                    ScrollView {
                     // ⚠️  VStack, NOT LazyVStack.
                     // LazyVStack de-realises off-screen rows and loses their
                     // heights, causing scrollTo to jump to stale positions
@@ -68,7 +76,7 @@ struct ChatView: View {
                     // is never hidden behind the input bar.
                     .padding(.bottom, 8)
                 }
-                .background(Color(.systemBackground))
+                    .background(Color.clear)
                 // Tapping anywhere in the message area dismisses the keyboard.
                 .onTapGesture {
                     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
@@ -142,14 +150,15 @@ struct ChatView: View {
                         proxy.scrollTo(bottomAnchor, anchor: .bottom)
                     }
                 }
+                }
+
+                Divider()
+
+                // ── Input Bar ─────────────────────────────────────────────────
+                InputBarView()
             }
-
-            Divider()
-
-            // ── Input Bar ─────────────────────────────────────────────────
-            InputBarView()
         }
-        .background(Color(.systemBackground))
+        .background(Color.clear)
         // ── Restore persisted sessions on first render ─────────────────────
         .onAppear {
             viewModel.loadSessions()
@@ -158,12 +167,35 @@ struct ChatView: View {
         .onReceive(keyboardPublisher) { height in
             keyboardHeight = height
         }
+        .onChange(of: backgroundRevision) { _ in
+            customBackgroundImage = ChatBackgroundImageManager.load()
+        }
         // ── Error Alert ───────────────────────────────────────────────────
         // Shows whenever the VM surfaces a typed APIError.
         // Uses the iOS 15-safe Alert(isPresented:) API.
         .alert(isPresented: errorAlertBinding) {
             buildErrorAlert()
         }
+    }
+
+    private var chatBackground: some View {
+        ZStack {
+            Color(.systemBackground)
+
+            if backgroundEnabled, let image = customBackgroundImage {
+                GeometryReader { geometry in
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                        .clipped()
+                        .blur(radius: backgroundBlur)
+                        .opacity(backgroundOpacity)
+                }
+                .clipped()
+            }
+        }
+        .ignoresSafeArea()
     }
 
     // MARK: - Scroll Helper

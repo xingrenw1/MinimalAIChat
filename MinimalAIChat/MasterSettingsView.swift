@@ -54,6 +54,17 @@ struct MasterSettingsView: View {
                         }
                         .padding(.vertical, 4)
                     }
+
+                    NavigationLink(destination: AppearanceSettingsView()) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "paintpalette")
+                                .font(.system(size: 20))
+                                .foregroundColor(.accentColor)
+                            Text("外观与背景")
+                                .font(.system(size: 16))
+                        }
+                        .padding(.vertical, 4)
+                    }
                     
                     NavigationLink(destination: AboutView()) {
                         HStack(spacing: 12) {
@@ -304,6 +315,178 @@ struct ProactiveChatSettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onDisappear {
             Task { await chatViewModel.proactiveSettingsDidChange() }
+        }
+    }
+}
+
+// MARK: - AppearanceSettingsView
+
+struct AppearanceSettingsView: View {
+    @AppStorage(AppearanceSettingsKey.theme) private var themeRawValue = AppTheme.ocean.rawValue
+    @AppStorage(AppearanceSettingsKey.colorScheme) private var colorSchemeRawValue = AppColorScheme.system.rawValue
+    @AppStorage(AppearanceSettingsKey.backgroundEnabled) private var backgroundEnabled = true
+    @AppStorage(AppearanceSettingsKey.backgroundOpacity) private var backgroundOpacity = 0.32
+    @AppStorage(AppearanceSettingsKey.backgroundBlur) private var backgroundBlur = 0.0
+    @AppStorage(AppearanceSettingsKey.backgroundRevision) private var backgroundRevision = 0
+
+    @State private var backgroundImage = ChatBackgroundImageManager.load()
+    @State private var showingImagePicker = false
+    @State private var showingSaveError = false
+
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 4)
+
+    var body: some View {
+        Form {
+            Section {
+                Picker("显示模式", selection: $colorSchemeRawValue) {
+                    ForEach(AppColorScheme.allCases) { scheme in
+                        Text(scheme.name).tag(scheme.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
+            } header: {
+                Text("明暗模式")
+            }
+
+            Section {
+                LazyVGrid(columns: columns, spacing: 16) {
+                    ForEach(AppTheme.allCases) { theme in
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                themeRawValue = theme.rawValue
+                            }
+                        } label: {
+                            VStack(spacing: 7) {
+                                ZStack {
+                                    Circle()
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [theme.accentColor, theme.secondaryColor],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                        .frame(width: 42, height: 42)
+
+                                    if themeRawValue == theme.rawValue {
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 15, weight: .bold))
+                                            .foregroundColor(.white)
+                                    }
+                                }
+                                Text(theme.name)
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.primary)
+                                    .lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("选择\(theme.name)主题")
+                    }
+                }
+                .padding(.vertical, 8)
+            } header: {
+                Text("主题色调")
+            } footer: {
+                Text("主题色会应用到按钮、消息气泡、图标和选中状态。")
+            }
+
+            Section {
+                if let image = backgroundImage {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(height: 150)
+                        .frame(maxWidth: .infinity)
+                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                    Toggle("启用自定义背景", isOn: $backgroundEnabled)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("背景可见度")
+                            Spacer()
+                            Text("\(Int(backgroundOpacity * 100))%")
+                                .foregroundColor(.secondary)
+                        }
+                        Slider(value: $backgroundOpacity, in: 0.12...0.85, step: 0.01)
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("模糊程度")
+                            Spacer()
+                            Text("\(Int(backgroundBlur))")
+                                .foregroundColor(.secondary)
+                        }
+                        Slider(value: $backgroundBlur, in: 0...16, step: 1)
+                    }
+                } else {
+                    HStack(spacing: 12) {
+                        Image(systemName: "photo.on.rectangle.angled")
+                            .font(.system(size: 25))
+                            .foregroundColor(.secondary)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("尚未选择背景图片")
+                            Text("支持从系统相册导入")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 5)
+                }
+
+                Button {
+                    showingImagePicker = true
+                } label: {
+                    Label(backgroundImage == nil ? "从相册选择背景图片" : "更换背景图片",
+                          systemImage: "photo.badge.plus")
+                }
+
+                if backgroundImage != nil {
+                    Button(role: .destructive) {
+                        ChatBackgroundImageManager.remove()
+                        backgroundImage = nil
+                        backgroundEnabled = false
+                        backgroundRevision += 1
+                    } label: {
+                        Label("移除自定义背景", systemImage: "trash")
+                    }
+                }
+            } header: {
+                Text("聊天背景")
+            } footer: {
+                Text("图片仅保存在本机应用目录中，不会上传到模型服务商。")
+            }
+        }
+        .navigationTitle("外观与背景")
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showingImagePicker) {
+            SystemImagePicker(
+                selectedImage: Binding(
+                    get: { backgroundImage },
+                    set: { image in
+                        guard let image = image else { return }
+                        if ChatBackgroundImageManager.save(image) {
+                            backgroundImage = image
+                            backgroundEnabled = true
+                            backgroundRevision += 1
+                        } else {
+                            showingSaveError = true
+                        }
+                    }
+                ),
+                allowsEditing: false
+            )
+        }
+        .alert(isPresented: $showingSaveError) {
+            Alert(
+                title: Text("无法保存图片"),
+                message: Text("请确认应用有照片访问权限，并重新选择图片。"),
+                dismissButton: .default(Text("确定"))
+            )
         }
     }
 }
