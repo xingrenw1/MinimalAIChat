@@ -344,7 +344,7 @@ struct RoleplayCharacterEditorView: View {
                 Button("保存") {
                     save()
                 }
-                .fontWeight(.semibold)
+                .font(.system(size: 16, weight: .semibold))
                 .disabled(character.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
