@@ -30,6 +30,8 @@
 		B1000012 /* AppearanceTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000012 /* AppearanceTheme.swift */; };
 		B1000013 /* RoleplayCharacter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000013 /* RoleplayCharacter.swift */; };
 		B1000014 /* RoleplaySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000014 /* RoleplaySettingsView.swift */; };
+		B1000015 /* ChatAttachments.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000015 /* ChatAttachments.swift */; };
+		B1000016 /* ModelLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000016 /* ModelLibrary.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -54,6 +56,8 @@
 		A1000012 /* AppearanceTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceTheme.swift; sourceTree = "<group>"; };
 		A1000013 /* RoleplayCharacter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoleplayCharacter.swift; sourceTree = "<group>"; };
 		A1000014 /* RoleplaySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoleplaySettingsView.swift; sourceTree = "<group>"; };
+		A1000015 /* ChatAttachments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatAttachments.swift; sourceTree = "<group>"; };
+		A1000016 /* ModelLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelLibrary.swift; sourceTree = "<group>"; };
 		B9CF97E71F27DBE64250F07E /* ProfileImageManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProfileImageManager.swift; sourceTree = "<group>"; };
 		EA8E3C33851B909A4398FBF5 /* SystemImagePicker.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SystemImagePicker.swift; sourceTree = "<group>"; };
 		F59DA19A0CD95D93964B929B /* MinimalAIChat.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MinimalAIChat.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -91,6 +95,8 @@
 				A1000012 /* AppearanceTheme.swift */,
 				A1000013 /* RoleplayCharacter.swift */,
 				A1000014 /* RoleplaySettingsView.swift */,
+				A1000015 /* ChatAttachments.swift */,
+				A1000016 /* ModelLibrary.swift */,
 				A1000009 /* Assets.xcassets */,
 				B9CF97E71F27DBE64250F07E /* ProfileImageManager.swift */,
 				EA8E3C33851B909A4398FBF5 /* SystemImagePicker.swift */,
@@ -203,6 +209,8 @@
 				B1000012 /* AppearanceTheme.swift in Sources */,
 				B1000013 /* RoleplayCharacter.swift in Sources */,
 				B1000014 /* RoleplaySettingsView.swift in Sources */,
+				B1000015 /* ChatAttachments.swift in Sources */,
+				B1000016 /* ModelLibrary.swift in Sources */,
 				493ED043147BB4E1AA5EA9F1 /* ProfileImageManager.swift in Sources */,
 				4F948ADF1BBB6BE770860639 /* SystemImagePicker.swift in Sources */,
 				80AD6F85CDBEDF1E15CD59F8 /* TavilySearchService.swift in Sources */,
@@ -348,7 +356,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 9;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
@@ -359,7 +367,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.5;
+				MARKETING_VERSION = 3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.valerioghost.MinimalAIChat;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -378,7 +386,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 9;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
@@ -389,7 +397,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.5;
+				MARKETING_VERSION = 3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.valerioghost.MinimalAIChat;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";

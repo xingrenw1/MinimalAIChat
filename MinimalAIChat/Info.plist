@@ -15,15 +15,15 @@
 	<key>CFBundlePackageType</key>
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
 	<key>CFBundleShortVersionString</key>
-	<string>3.0</string>
+	<string>3.1</string>
 	<key>CFBundleVersion</key>
-	<string>8</string>
+	<string>9</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>MinimumOSVersion</key>
 	<string>15.0</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>MinimalAIChat 需要访问照片图库，以便你设置个人头像。</string>
+	<string>MinimalAIChat 需要访问照片图库，以便你设置头像、聊天背景或在对话中添加图片。</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

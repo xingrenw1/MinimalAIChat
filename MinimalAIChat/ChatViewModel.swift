@@ -17,6 +17,7 @@ final class ChatViewModel: ObservableObject {
     @Published var sessions: [ChatSession]
     @Published var activeSessionID: UUID
     @Published var inputText: String = ""
+    @Published var pendingAttachments: [ChatAttachment] = []
     @Published var isTyping: Bool = false
     @Published var isSearchingWeb: Bool = false
     @Published private(set) var isStreamingActive: Bool = false
@@ -114,11 +115,13 @@ final class ChatViewModel: ObservableObject {
 
     func sendMessage() {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, !isTyping else { return }
+        guard (!text.isEmpty || !pendingAttachments.isEmpty), !isTyping else { return }
 
         inputText = ""
+        let attachments = pendingAttachments
+        pendingAttachments = []
         ProactiveChatManager.shared.cancelPending()
-        appendMessage(ChatMessage(role: .user, content: text))
+        appendMessage(ChatMessage(role: .user, content: text, attachments: attachments))
 
         // Cancel any stale in-flight request before starting a new one
         currentTask?.cancel()
@@ -152,6 +155,7 @@ final class ChatViewModel: ObservableObject {
     func startNewChat() {
         currentTask?.cancel()
         ProactiveChatManager.shared.cancelPending()
+        discardPendingAttachments()
         isTyping = false
         let session = Self.makeFreshSession()
         sessions.insert(session, at: 0)
@@ -163,6 +167,7 @@ final class ChatViewModel: ObservableObject {
     func selectSession(_ session: ChatSession) {
         currentTask?.cancel()
         ProactiveChatManager.shared.cancelPending()
+        discardPendingAttachments()
         isTyping = false
         activeSessionID = session.id
         Task { await ProactiveChatManager.shared.activate() }
@@ -220,7 +225,7 @@ final class ChatViewModel: ObservableObject {
         appendMessage(initialMessage, toSession: sessionIDAtDispatch)
         let messageID = initialMessage.id
 
-        if settings.hasTavilyKey {
+        if settings.canUseWebSearch {
             // --- Non-streaming path ---
             // Any provider (Gemini included) with a Tavily key configured goes through
             // the OpenAI-compatible endpoint with the function-calling tool loop.
@@ -430,7 +435,10 @@ final class ChatViewModel: ObservableObject {
         var currentLength = 0
         
         for message in messages.reversed() {
-            let length = message.content.count
+            let attachmentWeight = message.attachments.reduce(0) { partial, attachment in
+                partial + min(attachment.sizeBytes / 4, 40_000)
+            }
+            let length = message.content.count + attachmentWeight
             
             // Stop if adding this message exceeds budget AND we already have at least one message
             if currentLength + length > historyCharacterBudget && !result.isEmpty {
@@ -460,6 +468,43 @@ final class ChatViewModel: ObservableObject {
         }
 
         persistSessions()
+    }
+
+    func addPendingAttachments(_ attachments: [ChatAttachment]) throws {
+        guard pendingAttachments.count + attachments.count <= ChatAttachmentManager.maximumAttachmentCount else {
+            attachments.forEach(ChatAttachmentManager.remove)
+            throw ChatAttachmentError.tooManyAttachments
+        }
+        pendingAttachments.append(contentsOf: attachments)
+    }
+
+    func removePendingAttachment(_ attachment: ChatAttachment) {
+        pendingAttachments.removeAll { $0.id == attachment.id }
+        ChatAttachmentManager.remove(attachment)
+    }
+
+    func renameSession(_ session: ChatSession, to title: String) {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let index = sessions.firstIndex(where: { $0.id == session.id }) else { return }
+        sessions[index].title = String(trimmed.prefix(80))
+        sessions[index].lastUpdated = Date()
+        persistSessions()
+    }
+
+    func deleteSession(_ session: ChatSession) {
+        guard sessions.contains(where: { $0.id == session.id }) else { return }
+        if session.id == activeSessionID {
+            deleteCurrentSession()
+            return
+        }
+        sessions.removeAll { $0.id == session.id }
+        persistSessions()
+    }
+
+    private func discardPendingAttachments() {
+        pendingAttachments.forEach(ChatAttachmentManager.remove)
+        pendingAttachments = []
     }
 
     private func generateProactiveMessage() async throws -> PreparedProactiveMessage? {

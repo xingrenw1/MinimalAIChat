@@ -16,6 +16,7 @@ struct SettingsView: View {
     @State private var availableModels: [AvailableModel] = []
     @State private var isLoadingModels: Bool = false
     @State private var showModelPicker: Bool = false
+    @State private var showModelLibrary: Bool = false
     @State private var showCustomModelSheet: Bool = false
     @State private var customModelID: String = ""
     @State private var modelListError: String? = nil
@@ -55,13 +56,29 @@ struct SettingsView: View {
             )
         }
         .sheet(isPresented: $showModelPicker) {
-            ModelPickerView(models: availableModels, selectedModel: $settings.modelName)
+            ModelPickerView(
+                models: availableModels,
+                selectedModel: $settings.modelName,
+                onSelect: { model in
+                    ModelLibraryStore.shared.add(
+                        id: model.id,
+                        name: model.displayName,
+                        summary: model.description ?? "从在线模型列表添加",
+                        tags: model.visibleCapabilities.map(\.name)
+                    )
+                }
+            )
+        }
+        .sheet(isPresented: $showModelLibrary) {
+            ModelLibraryView()
+                .environmentObject(settings)
         }
         .sheet(isPresented: $showCustomModelSheet) {
             CustomModelView(modelID: $customModelID) {
                 let value = customModelID.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !value.isEmpty {
                     settings.modelName = value
+                    ModelLibraryStore.shared.add(id: value)
                     flashSavedBanner()
                 }
                 showCustomModelSheet = false
@@ -135,6 +152,15 @@ struct SettingsView: View {
                     }
                 }
                 .padding(.top, 6)
+
+                Button {
+                    showModelLibrary = true
+                } label: {
+                    Label("打开推荐与自定义模型库", systemImage: "square.stack.3d.up")
+                        .font(.system(size: 13, weight: .medium))
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 4)
 
                 if let modelListError {
                     Text(modelListError)
@@ -728,6 +754,7 @@ private final class ModelCatalogService {
 private struct ModelPickerView: View {
     let models: [AvailableModel]
     @Binding var selectedModel: String
+    let onSelect: (AvailableModel) -> Void
     @Environment(\.presentationMode) private var presentationMode
     @State private var searchText: String = ""
     @State private var moderationFilter: ModelModerationFilter = .all
@@ -800,6 +827,7 @@ private struct ModelPickerView: View {
                     List(filteredModels) { model in
                         Button {
                             selectedModel = model.id
+                            onSelect(model)
                             presentationMode.wrappedValue.dismiss()
                         } label: {
                             VStack(alignment: .leading, spacing: 6) {

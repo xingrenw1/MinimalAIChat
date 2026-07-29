@@ -6,6 +6,8 @@ import SwiftUI
 struct MasterSettingsView: View {
 
     @Environment(\.presentationMode) private var presentationMode
+    @EnvironmentObject private var settings: SettingsViewModel
+    @State private var showingModelLibrary = false
 
     var body: some View {
         NavigationView {
@@ -44,6 +46,73 @@ struct MasterSettingsView: View {
                         .padding(.vertical, 4)
                     }
 
+                } header: {
+                    Text("个人与角色")
+                }
+
+                Section {
+                    NavigationLink(destination: SettingsView()) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "square.grid.2x2")
+                                .font(.system(size: 20))
+                                .foregroundColor(.accentColor)
+                            Text("模型提供方与 API")
+                                .font(.system(size: 16))
+                        }
+                        .padding(.vertical, 4)
+                    }
+
+                    Button {
+                        showingModelLibrary = true
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "cube")
+                                .font(.system(size: 20))
+                                .foregroundColor(.accentColor)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("默认模型")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(.primary)
+                                Text(modelDisplayName)
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(1)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(Color(.tertiaryLabel))
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .buttonStyle(.plain)
+
+                    NavigationLink(destination: WebSearchSettingsView()) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "globe")
+                                .font(.system(size: 20))
+                                .foregroundColor(.accentColor)
+                            Text("联网搜索")
+                                .font(.system(size: 16))
+                        }
+                        .padding(.vertical, 4)
+                    }
+                } header: {
+                    Text("模型与联网")
+                }
+
+                Section {
+                    NavigationLink(destination: AttachmentSettingsView()) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "doc.text")
+                                .font(.system(size: 20))
+                                .foregroundColor(.accentColor)
+                            Text("文档、图片与附件")
+                                .font(.system(size: 16))
+                        }
+                        .padding(.vertical, 4)
+                    }
+
                     NavigationLink(destination: ProactiveChatSettingsView()) {
                         HStack(spacing: 12) {
                             Image(systemName: "message.badge")
@@ -54,18 +123,11 @@ struct MasterSettingsView: View {
                         }
                         .padding(.vertical, 4)
                     }
+                } header: {
+                    Text("对话")
+                }
 
-                    NavigationLink(destination: SettingsView()) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "network")
-                                .font(.system(size: 20))
-                                .foregroundColor(.accentColor)
-                            Text("API 与连接设置")
-                                .font(.system(size: 16))
-                        }
-                        .padding(.vertical, 4)
-                    }
-
+                Section {
                     NavigationLink(destination: AppearanceSettingsView()) {
                         HStack(spacing: 12) {
                             Image(systemName: "paintpalette")
@@ -88,7 +150,7 @@ struct MasterSettingsView: View {
                         .padding(.vertical, 4)
                     }
                 } header: {
-                    Text("设置")
+                    Text("应用")
                 }
             }
             .navigationTitle("设置")
@@ -101,8 +163,18 @@ struct MasterSettingsView: View {
                     .font(.system(size: 16, weight: .semibold))
                 }
             }
+            .sheet(isPresented: $showingModelLibrary) {
+                ModelLibraryView()
+                    .environmentObject(settings)
+            }
         }
         .navigationViewStyle(.stack)
+    }
+
+    private var modelDisplayName: String {
+        ModelLibraryStore.shared.model(for: settings.modelName)?.name
+            ?? settings.modelName.split(separator: "/").last.map(String.init)
+            ?? settings.modelName
     }
 }
 
@@ -231,6 +303,93 @@ struct PromptSettingsView: View {
         }
         .navigationTitle("AI 人格设定")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+// MARK: - Web Search
+
+struct WebSearchSettingsView: View {
+    @EnvironmentObject private var settings: SettingsViewModel
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("在对话中启用联网搜索", isOn: $settings.webSearchEnabled)
+            } footer: {
+                Text("聊天栏的“联网”按钮也可以针对当前使用状态快速开关。模型需要支持工具调用。")
+            }
+
+            Section {
+                SecureField("Tavily API Key", text: $settings.tavilyApiKey)
+                    .textInputAutocapitalization(.never)
+                    .disableAutocorrection(true)
+                HStack {
+                    Circle()
+                        .fill(settings.hasTavilyKey ? Color.green : Color.orange)
+                        .frame(width: 9, height: 9)
+                    Text(settings.hasTavilyKey ? "已配置，可使用联网搜索" : "尚未填写搜索服务密钥")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                }
+            } header: {
+                Text("搜索服务")
+            } footer: {
+                Text("搜索结果会作为工具上下文发送给当前模型。API Key 安全保存在 iOS 钥匙串。")
+            }
+        }
+        .navigationTitle("联网搜索")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+// MARK: - Attachments
+
+struct AttachmentSettingsView: View {
+    var body: some View {
+        Form {
+            Section {
+                AttachmentCapabilityRow(icon: "photo", title: "图片", detail: "JPEG、PNG、WebP、GIF；发送前自动压缩")
+                AttachmentCapabilityRow(icon: "doc.richtext", title: "PDF", detail: "以 OpenRouter 文件输入格式发送")
+                AttachmentCapabilityRow(icon: "doc.text", title: "文本文件", detail: "TXT、Markdown、JSON、CSV、XML、YAML")
+                AttachmentCapabilityRow(icon: "doc", title: "其他文件", detail: "按模型和提供商支持情况发送")
+            } header: {
+                Text("支持的附件")
+            } footer: {
+                Text("聊天栏点击回形针即可选择照片或文件。每条消息最多 6 个附件，单个文件最大 12 MB。是否能够理解图片或文档取决于当前模型能力。")
+            }
+
+            Section {
+                Label("附件只保存在本机应用目录与对应聊天记录中。", systemImage: "lock.shield")
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+            } header: {
+                Text("隐私")
+            }
+        }
+        .navigationTitle("文档与附件")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct AttachmentCapabilityRow: View {
+    let icon: String
+    let title: String
+    let detail: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .foregroundColor(.accentColor)
+                .frame(width: 22)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 15, weight: .medium))
+                Text(detail)
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(.vertical, 3)
     }
 }
 

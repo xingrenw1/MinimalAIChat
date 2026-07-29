@@ -22,16 +22,22 @@ struct MessageBubbleView: View {
         HStack(alignment: .bottom, spacing: 0) {
             Spacer(minLength: 56)
             VStack(alignment: .trailing, spacing: 4) {
-                Text(message.content)
-                    .font(.system(size: 16))
-                    .lineSpacing(3)
-                    .multilineTextAlignment(.trailing)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(Color.accentColor)
-                    .foregroundColor(.white)
-                    .clipShape(BubbleShape(isUser: true))
-                    .shadow(color: .black.opacity(0.06), radius: 4, x: 0, y: 2)
+                if !message.attachments.isEmpty {
+                    userAttachmentGrid
+                }
+
+                if !message.content.isEmpty {
+                    Text(message.content)
+                        .font(.system(size: 16))
+                        .lineSpacing(3)
+                        .multilineTextAlignment(.trailing)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(Color.accentColor)
+                        .foregroundColor(.white)
+                        .clipShape(BubbleShape(isUser: true))
+                        .shadow(color: .black.opacity(0.06), radius: 4, x: 0, y: 2)
+                }
 
                 Text(formattedTime(message.timestamp))
                     .font(.system(size: 11))
@@ -42,6 +48,48 @@ struct MessageBubbleView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 3)
+    }
+
+    private var userAttachmentGrid: some View {
+        VStack(alignment: .trailing, spacing: 7) {
+            ForEach(message.attachments) { attachment in
+                if attachment.kind == .image,
+                   let image = ChatAttachmentManager.image(for: attachment) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: 250, maxHeight: 260)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                } else {
+                    HStack(spacing: 9) {
+                        Image(systemName: attachmentIcon(attachment))
+                            .font(.system(size: 20))
+                            .foregroundColor(.accentColor)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(attachment.fileName)
+                                .font(.system(size: 13, weight: .medium))
+                                .lineLimit(2)
+                            Text(attachment.sizeDescription)
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(10)
+                    .frame(maxWidth: 250, alignment: .leading)
+                    .background(Color(.secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+            }
+        }
+    }
+
+    private func attachmentIcon(_ attachment: ChatAttachment) -> String {
+        switch attachment.kind {
+        case .pdf: return "doc.richtext"
+        case .text: return "doc.text"
+        case .file: return "doc"
+        case .image: return "photo"
+        }
     }
 
     // MARK: - Assistant message (full-width, no background — ChatGPT style)

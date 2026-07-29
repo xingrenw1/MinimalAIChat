@@ -14,6 +14,7 @@ enum SettingsKey {
     static let maxTokens   = "settings.maxTokens"
     static let historyCharacterBudget = "settings.historyCharacterBudget"
     static let tavilyApiKey = "settings.tavilyApiKey"
+    static let webSearchEnabled = "settings.webSearchEnabled"
     static let proactiveEnabled = "settings.proactiveEnabled"
     static let proactiveMinimumMinutes = "settings.proactiveMinimumMinutes"
     static let proactiveMaximumMinutes = "settings.proactiveMaximumMinutes"
@@ -67,6 +68,10 @@ final class SettingsViewModel: ObservableObject {
 
     @Published var tavilyApiKey: String {
         didSet { KeychainHelper.shared.save(tavilyApiKey, forKey: SettingsKey.tavilyApiKey) }
+    }
+
+    @Published var webSearchEnabled: Bool {
+        didSet { UserDefaults.standard.set(webSearchEnabled, forKey: SettingsKey.webSearchEnabled) }
     }
 
     /// The user's display name — shared key with OnboardingView's @AppStorage("userName").
@@ -137,6 +142,7 @@ final class SettingsViewModel: ObservableObject {
 
     var hasAPIKey: Bool { !apiKey.isEmpty }
     var hasTavilyKey: Bool { !tavilyApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    var canUseWebSearch: Bool { hasTavilyKey && webSearchEnabled }
 
     // MARK: - Init
 
@@ -146,6 +152,7 @@ final class SettingsViewModel: ObservableObject {
         self.modelName = defaults.string(forKey: SettingsKey.modelName) ?? SettingsDefault.modelName
         self.apiKey    = KeychainHelper.shared.read(forKey: SettingsKey.apiKey) ?? ""
         self.tavilyApiKey = KeychainHelper.shared.read(forKey: SettingsKey.tavilyApiKey) ?? ""
+        self.webSearchEnabled = defaults.object(forKey: SettingsKey.webSearchEnabled) as? Bool ?? true
         self.userName  = defaults.string(forKey: SettingsKey.userName)  ?? ""
         self.profileImage = ProfileImageManager.load()
         self.temperature = defaults.object(forKey: SettingsKey.temperature) as? Double ?? SettingsDefault.temperature
@@ -175,5 +182,6 @@ final class SettingsViewModel: ObservableObject {
         proactiveQuietEndHour = SettingsDefault.proactiveQuietEndHour
         proactivePrompt = SettingsDefault.proactivePrompt
         proactiveNotificationTitle = SettingsDefault.proactiveNotificationTitle
+        webSearchEnabled = true
     }
 }

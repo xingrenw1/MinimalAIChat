@@ -21,18 +21,28 @@ struct ChatMessage: Identifiable, Codable {
     let timestamp: Date
     var isError: Bool
     var isComplete: Bool
+    var attachments: [ChatAttachment]
 
     enum CodingKeys: String, CodingKey {
-        case id, role, content, timestamp, isError, isComplete
+        case id, role, content, timestamp, isError, isComplete, attachments
     }
 
-    init(id: UUID = UUID(), role: MessageRole, content: String, timestamp: Date = Date(), isError: Bool = false, isComplete: Bool = true) {
+    init(
+        id: UUID = UUID(),
+        role: MessageRole,
+        content: String,
+        timestamp: Date = Date(),
+        isError: Bool = false,
+        isComplete: Bool = true,
+        attachments: [ChatAttachment] = []
+    ) {
         self.id = id
         self.role = role
         self.content = content
         self.timestamp = timestamp
         self.isError = isError
         self.isComplete = isComplete
+        self.attachments = attachments
     }
 
     init(from decoder: Decoder) throws {
@@ -44,6 +54,7 @@ struct ChatMessage: Identifiable, Codable {
         isError = try container.decodeIfPresent(Bool.self, forKey: .isError) ?? false
         // Default true: old persisted messages were always fully completed replies
         isComplete = try container.decodeIfPresent(Bool.self, forKey: .isComplete) ?? true
+        attachments = try container.decodeIfPresent([ChatAttachment].self, forKey: .attachments) ?? []
     }
 
     func encode(to encoder: Encoder) throws {
@@ -54,6 +65,7 @@ struct ChatMessage: Identifiable, Codable {
         try container.encode(timestamp, forKey: .timestamp)
         try container.encode(isError, forKey: .isError)
         try container.encode(isComplete, forKey: .isComplete)
+        try container.encode(attachments, forKey: .attachments)
     }
 }
 

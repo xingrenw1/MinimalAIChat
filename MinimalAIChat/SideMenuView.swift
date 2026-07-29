@@ -10,6 +10,7 @@ struct SideMenuView: View {
     @AppStorage("userName") private var userName: String = ""
     @State private var showClearAlert: Bool = false
     @State private var isShowingMasterSettings: Bool = false
+    @State private var sessionToRename: ChatSession?
 
     var body: some View {
         ZStack {
@@ -45,13 +46,20 @@ struct SideMenuView: View {
                         ForEach(viewModel.sessions) { session in
                             SessionRowView(
                                 session: session,
-                                isActive: session.id == viewModel.activeSessionID
-                            ) {
-                                viewModel.selectSession(session)
-                                withAnimation(.easeInOut(duration: 0.3)) {
-                                    isMenuOpen = false
+                                isActive: session.id == viewModel.activeSessionID,
+                                onTap: {
+                                    viewModel.selectSession(session)
+                                    withAnimation(.easeInOut(duration: 0.3)) {
+                                        isMenuOpen = false
+                                    }
+                                },
+                                onRename: {
+                                    sessionToRename = session
+                                },
+                                onDelete: {
+                                    viewModel.deleteSession(session)
                                 }
-                            }
+                            )
                         }
                     }
                     .padding(.horizontal, 12)
@@ -68,6 +76,11 @@ struct SideMenuView: View {
         .sheet(isPresented: $isShowingMasterSettings) {
             MasterSettingsView()
                 .environmentObject(settings)
+        }
+        .sheet(item: $sessionToRename) { session in
+            RenameSessionView(session: session) { title in
+                viewModel.renameSession(session, to: title)
+            }
         }
         // ── Clear Chat confirmation alert ─────────────────────────────────
         .alert(isPresented: $showClearAlert) {
@@ -226,10 +239,13 @@ struct SessionRowView: View {
     let session: ChatSession
     let isActive: Bool
     let onTap: () -> Void
+    let onRename: () -> Void
+    let onDelete: () -> Void
 
     var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 12) {
+        HStack(spacing: 8) {
+            Button(action: onTap) {
+                HStack(spacing: 12) {
                 Image(systemName: "bubble.left")
                     .font(.system(size: 14))
                     .foregroundColor(isActive ? .accentColor : .secondary)
@@ -247,7 +263,27 @@ struct SessionRowView: View {
                 }
 
                 Spacer()
+                }
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+
+            Menu {
+                Button(action: onRename) {
+                    Label("重命名", systemImage: "pencil")
+                }
+                Button(role: .destructive, action: onDelete) {
+                    Label("删除", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .frame(width: 30, height: 30)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
             .padding(.vertical, 10)
             .padding(.horizontal, 12)
             .background(
@@ -256,8 +292,6 @@ struct SessionRowView: View {
                     : Color.clear
             )
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        }
-        .buttonStyle(.plain)
     }
 
     private func relativeDate(_ date: Date) -> String {
@@ -265,6 +299,42 @@ struct SessionRowView: View {
         formatter.locale = Locale(identifier: "zh_CN")
         formatter.unitsStyle = .short
         return formatter.localizedString(for: date, relativeTo: Date())
+    }
+}
+
+private struct RenameSessionView: View {
+    let session: ChatSession
+    let onSave: (String) -> Void
+    @Environment(\.presentationMode) private var presentationMode
+    @State private var title: String
+
+    init(session: ChatSession, onSave: @escaping (String) -> Void) {
+        self.session = session
+        self.onSave = onSave
+        _title = State(initialValue: session.title)
+    }
+
+    var body: some View {
+        NavigationView {
+            Form {
+                TextField("话题名称", text: $title)
+            }
+            .navigationTitle("重命名话题")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("取消") { presentationMode.wrappedValue.dismiss() }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("保存") {
+                        onSave(title)
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+        .navigationViewStyle(.stack)
     }
 }
 

@@ -2,10 +2,54 @@ import Foundation
 
 // MARK: - OpenAI-Compatible Request / Response Models
 
+struct APIContentPart: Encodable {
+    struct ImageURL: Encodable {
+        let url: String
+    }
+
+    struct FileContent: Encodable {
+        let filename: String
+        let fileData: String
+
+        enum CodingKeys: String, CodingKey {
+            case filename
+            case fileData = "file_data"
+        }
+    }
+
+    let type: String
+    let text: String?
+    let imageURL: ImageURL?
+    let file: FileContent?
+
+    enum CodingKeys: String, CodingKey {
+        case type, text, file
+        case imageURL = "image_url"
+    }
+
+    static func text(_ text: String) -> APIContentPart {
+        APIContentPart(type: "text", text: text, imageURL: nil, file: nil)
+    }
+
+    static func image(dataURL: String) -> APIContentPart {
+        APIContentPart(type: "image_url", text: nil, imageURL: ImageURL(url: dataURL), file: nil)
+    }
+
+    static func file(name: String, dataURL: String) -> APIContentPart {
+        APIContentPart(
+            type: "file",
+            text: nil,
+            imageURL: nil,
+            file: FileContent(filename: name, fileData: dataURL)
+        )
+    }
+}
+
 /// A single message in the `messages` array sent to the API.
 struct APIMessage: Codable {
     let role: String
     let content: String?
+    let contentParts: [APIContentPart]?
     let toolCallId: String?
     let toolCalls: [ToolCall]?
 
@@ -15,11 +59,39 @@ struct APIMessage: Codable {
         case toolCalls = "tool_calls"
     }
 
-    init(role: String, content: String? = nil, toolCallId: String? = nil, toolCalls: [ToolCall]? = nil) {
+    init(
+        role: String,
+        content: String? = nil,
+        contentParts: [APIContentPart]? = nil,
+        toolCallId: String? = nil,
+        toolCalls: [ToolCall]? = nil
+    ) {
         self.role = role
         self.content = content
+        self.contentParts = contentParts
         self.toolCallId = toolCallId
         self.toolCalls = toolCalls
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        role = try container.decode(String.self, forKey: .role)
+        content = try? container.decode(String.self, forKey: .content)
+        contentParts = nil
+        toolCallId = try container.decodeIfPresent(String.self, forKey: .toolCallId)
+        toolCalls = try container.decodeIfPresent([ToolCall].self, forKey: .toolCalls)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(role, forKey: .role)
+        if let contentParts {
+            try container.encode(contentParts, forKey: .content)
+        } else {
+            try container.encodeIfPresent(content, forKey: .content)
+        }
+        try container.encodeIfPresent(toolCallId, forKey: .toolCallId)
+        try container.encodeIfPresent(toolCalls, forKey: .toolCalls)
     }
 }
 
@@ -175,6 +247,41 @@ final class ChatAPIService {
         self.session = URLSession(configuration: config)
     }
 
+    private func apiMessage(from message: ChatMessage) -> APIMessage {
+        guard message.role == .user, !message.attachments.isEmpty else {
+            return APIMessage(role: message.role.rawValue, content: message.content)
+        }
+
+        var parts: [APIContentPart] = []
+        let text = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !text.isEmpty {
+            parts.append(.text(text))
+        }
+
+        for attachment in message.attachments {
+            switch attachment.kind {
+            case .image:
+                guard let data = ChatAttachmentManager.data(for: attachment) else { continue }
+                let dataURL = "data:\(attachment.mimeType);base64,\(data.base64EncodedString())"
+                parts.append(.image(dataURL: dataURL))
+
+            case .text:
+                guard let fileText = ChatAttachmentManager.text(for: attachment) else { continue }
+                parts.append(.text("【附件：\(attachment.fileName)】\n\(fileText)"))
+
+            case .pdf, .file:
+                guard let data = ChatAttachmentManager.data(for: attachment) else { continue }
+                let dataURL = "data:\(attachment.mimeType);base64,\(data.base64EncodedString())"
+                parts.append(.file(name: attachment.fileName, dataURL: dataURL))
+            }
+        }
+
+        guard !parts.isEmpty else {
+            return APIMessage(role: message.role.rawValue, content: message.content)
+        }
+        return APIMessage(role: message.role.rawValue, contentParts: parts)
+    }
+
     // MARK: - Public API
 
     /// Sends the full conversation history and returns the assistant reply text.
@@ -234,10 +341,10 @@ final class ChatAPIService {
         let combinedSystemContent = personalityContent + "\n\n" + temporalContent
         let systemMessage = APIMessage(role: "system", content: combinedSystemContent)
 
-        let userMessages  = messages.map { APIMessage(role: $0.role.rawValue, content: $0.content) }
+        let userMessages  = messages.map { apiMessage(from: $0) }
         let apiMessages   = [systemMessage] + userMessages
 
-        let toolsToSend: [ToolDefinition]? = allowTools && settings.hasTavilyKey ? [ToolDefinition.webSearch] : nil
+        let toolsToSend: [ToolDefinition]? = allowTools && settings.canUseWebSearch ? [ToolDefinition.webSearch] : nil
 
         let body = ChatCompletionRequest(
             model: model,
@@ -586,7 +693,7 @@ final class ChatAPIService {
                     let combinedSystemContent = personalityContent + "\n\n" + temporalContent
                     let systemMessage = APIMessage(role: "system", content: combinedSystemContent)
 
-                    let userMessages  = messages.map { APIMessage(role: $0.role.rawValue, content: $0.content) }
+                    let userMessages  = messages.map { self.apiMessage(from: $0) }
                     let apiMessages   = [systemMessage] + userMessages
 
                     // This method never declares tools — see the doc comment above.
