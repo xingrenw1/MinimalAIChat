@@ -480,6 +480,73 @@ struct AdvancedSettingsView: View {
 
 // MARK: - Model Catalog
 
+enum ModelCapability: String, CaseIterable, Identifiable, Hashable {
+    case tools
+    case reasoning
+    case structuredOutput
+    case imageInput
+    case audioInput
+    case fileInput
+
+    var id: String { rawValue }
+
+    var name: String {
+        switch self {
+        case .tools: return "工具调用"
+        case .reasoning: return "推理"
+        case .structuredOutput: return "结构化输出"
+        case .imageInput: return "图片输入"
+        case .audioInput: return "音频输入"
+        case .fileInput: return "文件输入"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .tools: return "wrench.and.screwdriver"
+        case .reasoning: return "brain.head.profile"
+        case .structuredOutput: return "curlybraces"
+        case .imageInput: return "photo"
+        case .audioInput: return "waveform"
+        case .fileInput: return "doc"
+        }
+    }
+}
+
+private enum ModelModerationFilter: String, CaseIterable, Identifiable, Hashable {
+    case all
+    case unmoderated
+    case moderated
+    case unknown
+
+    var id: String { rawValue }
+
+    var name: String {
+        switch self {
+        case .all: return "不限"
+        case .unmoderated: return "未启用审核"
+        case .moderated: return "已启用审核"
+        case .unknown: return "未标明"
+        }
+    }
+}
+
+private enum ModelPriceFilter: String, CaseIterable, Identifiable, Hashable {
+    case all
+    case free
+    case paid
+
+    var id: String { rawValue }
+
+    var name: String {
+        switch self {
+        case .all: return "全部"
+        case .free: return "免费"
+        case .paid: return "付费"
+        }
+    }
+}
+
 struct AvailableModel: Decodable, Identifiable, Hashable {
     struct Pricing: Decodable, Hashable {
         let prompt: String?
@@ -494,6 +561,16 @@ struct AvailableModel: Decodable, Identifiable, Hashable {
         }
     }
 
+    struct Architecture: Decodable, Hashable {
+        let inputModalities: [String]?
+        let outputModalities: [String]?
+
+        enum CodingKeys: String, CodingKey {
+            case inputModalities = "input_modalities"
+            case outputModalities = "output_modalities"
+        }
+    }
+
     let id: String
     let name: String?
     let description: String?
@@ -501,12 +578,14 @@ struct AvailableModel: Decodable, Identifiable, Hashable {
     let pricing: Pricing?
     let supportedParameters: [String]?
     let topProvider: Provider?
+    let architecture: Architecture?
 
     enum CodingKeys: String, CodingKey {
         case id, name, description, pricing
         case contextLength = "context_length"
         case supportedParameters = "supported_parameters"
         case topProvider = "top_provider"
+        case architecture
     }
 
     var displayName: String {
@@ -537,6 +616,38 @@ struct AvailableModel: Decodable, Identifiable, Hashable {
         let inputText = prompt.map { Self.priceString($0) } ?? "—"
         let outputText = completion.map { Self.priceString($0) } ?? "—"
         return "输入 $\(inputText) / 输出 $\(outputText)（每百万 Token）"
+    }
+
+    var isFree: Bool {
+        guard let pricing,
+              let prompt = pricing.prompt.flatMap(Double.init),
+              let completion = pricing.completion.flatMap(Double.init) else {
+            return id.hasSuffix(":free")
+        }
+        return prompt == 0 && completion == 0
+    }
+
+    func supports(_ capability: ModelCapability) -> Bool {
+        let parameters = Set((supportedParameters ?? []).map { $0.lowercased() })
+        let inputs = Set((architecture?.inputModalities ?? []).map { $0.lowercased() })
+        switch capability {
+        case .tools:
+            return parameters.contains("tools") || parameters.contains("tool_choice")
+        case .reasoning:
+            return parameters.contains("reasoning") || parameters.contains("include_reasoning")
+        case .structuredOutput:
+            return parameters.contains("structured_outputs") || parameters.contains("response_format")
+        case .imageInput:
+            return inputs.contains("image")
+        case .audioInput:
+            return inputs.contains("audio")
+        case .fileInput:
+            return inputs.contains("file")
+        }
+    }
+
+    var visibleCapabilities: [ModelCapability] {
+        ModelCapability.allCases.filter { supports($0) }
     }
 
     private static func priceString(_ value: Double) -> String {
@@ -619,68 +730,136 @@ private struct ModelPickerView: View {
     @Binding var selectedModel: String
     @Environment(\.presentationMode) private var presentationMode
     @State private var searchText: String = ""
+    @State private var moderationFilter: ModelModerationFilter = .all
+    @State private var priceFilter: ModelPriceFilter = .all
+    @State private var minimumContext: Int = 0
+    @State private var requiredCapabilities: Set<ModelCapability> = []
+    @State private var showingFilters = false
 
     private var filteredModels: [AvailableModel] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return models }
-        return models.filter {
-            $0.id.localizedCaseInsensitiveContains(query) ||
-            $0.displayName.localizedCaseInsensitiveContains(query) ||
-            ($0.description?.localizedCaseInsensitiveContains(query) ?? false)
+        return models.filter { model in
+            let matchesQuery = query.isEmpty ||
+                model.id.localizedCaseInsensitiveContains(query) ||
+                model.displayName.localizedCaseInsensitiveContains(query) ||
+                (model.description?.localizedCaseInsensitiveContains(query) ?? false)
+
+            let matchesModeration: Bool = {
+                switch moderationFilter {
+                case .all: return true
+                case .unmoderated: return model.topProvider?.isModerated == false
+                case .moderated: return model.topProvider?.isModerated == true
+                case .unknown: return model.topProvider?.isModerated == nil
+                }
+            }()
+
+            let matchesPrice: Bool = {
+                switch priceFilter {
+                case .all: return true
+                case .free: return model.isFree
+                case .paid: return !model.isFree
+                }
+            }()
+
+            let matchesContext = minimumContext == 0 || (model.contextLength ?? 0) >= minimumContext
+            let matchesCapabilities = requiredCapabilities.allSatisfy { model.supports($0) }
+
+            return matchesQuery && matchesModeration && matchesPrice &&
+                matchesContext && matchesCapabilities
         }
+    }
+
+    private var activeFilterCount: Int {
+        var count = 0
+        if moderationFilter != .all { count += 1 }
+        if priceFilter != .all { count += 1 }
+        if minimumContext > 0 { count += 1 }
+        count += requiredCapabilities.count
+        return count
     }
 
     var body: some View {
         NavigationView {
-            List(filteredModels) { model in
-                Button {
-                    selectedModel = model.id
-                    presentationMode.wrappedValue.dismiss()
-                } label: {
-                    VStack(alignment: .leading, spacing: 5) {
-                        HStack(alignment: .firstTextBaseline) {
-                            Text(model.displayName)
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundColor(.primary)
-                            Spacer()
-                            if selectedModel == model.id {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.accentColor)
-                            }
-                        }
-
-                        Text(model.id)
-                            .font(.system(size: 12, design: .monospaced))
-                            .foregroundColor(.accentColor)
-                            .textSelection(.enabled)
-
-                        HStack(spacing: 8) {
-                            if let context = model.contextDescription {
-                                Text(context)
-                            }
-                            if let price = model.priceDescription {
-                                Text(price)
-                            }
-                        }
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-
-                        if let description = model.description, !description.isEmpty {
-                            Text(description)
-                                .font(.system(size: 12))
-                                .foregroundColor(.secondary)
-                                .lineLimit(3)
-                        }
-
-                        if let moderated = model.topProvider?.isModerated {
-                            Text(moderated ? "提供商标记：有内容审核" : "提供商标记：未启用内容审核")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(moderated ? .orange : .green)
+            Group {
+                if filteredModels.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "line.3.horizontal.decrease.circle")
+                            .font(.system(size: 38))
+                            .foregroundColor(.secondary)
+                        Text("没有符合条件的模型")
+                            .font(.headline)
+                        Text("请减少筛选条件或清除搜索词。")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        Button("重置筛选") {
+                            resetFilters()
                         }
                     }
-                    .padding(.vertical, 5)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List(filteredModels) { model in
+                        Button {
+                            selectedModel = model.id
+                            presentationMode.wrappedValue.dismiss()
+                        } label: {
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack(alignment: .firstTextBaseline) {
+                                    Text(model.displayName)
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    if selectedModel == model.id {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundColor(.accentColor)
+                                    }
+                                }
+
+                                Text(model.id)
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .foregroundColor(.accentColor)
+                                    .textSelection(.enabled)
+
+                                HStack(spacing: 8) {
+                                    if let context = model.contextDescription {
+                                        Text(context)
+                                    }
+                                    if let price = model.priceDescription {
+                                        Text(price)
+                                    }
+                                }
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+
+                                if !model.visibleCapabilities.isEmpty {
+                                    ScrollView(.horizontal, showsIndicators: false) {
+                                        HStack(spacing: 5) {
+                                            ForEach(model.visibleCapabilities) { capability in
+                                                Label(capability.name, systemImage: capability.icon)
+                                                    .font(.system(size: 10, weight: .medium))
+                                                    .foregroundColor(.accentColor)
+                                                    .padding(.horizontal, 7)
+                                                    .padding(.vertical, 4)
+                                                    .background(Color.accentColor.opacity(0.1))
+                                                    .clipShape(Capsule())
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if let description = model.description, !description.isEmpty {
+                                    Text(description)
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.secondary)
+                                        .lineLimit(3)
+                                }
+
+                                moderationBadge(for: model)
+                            }
+                            .padding(.vertical, 5)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
-                .buttonStyle(.plain)
             }
             .searchable(text: $searchText, prompt: "搜索名称、模型 ID 或描述")
             .navigationTitle("选择模型（\(filteredModels.count)）")
@@ -688,6 +867,150 @@ private struct ModelPickerView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("关闭") { presentationMode.wrappedValue.dismiss() }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showingFilters = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: activeFilterCount == 0
+                                  ? "line.3.horizontal.decrease.circle"
+                                  : "line.3.horizontal.decrease.circle.fill")
+                            if activeFilterCount > 0 {
+                                Text("\(activeFilterCount)")
+                                    .font(.caption2)
+                            }
+                        }
+                    }
+                    .accessibilityLabel("筛选模型")
+                }
+            }
+        }
+        .navigationViewStyle(.stack)
+        .sheet(isPresented: $showingFilters) {
+            ModelFilterView(
+                moderationFilter: $moderationFilter,
+                priceFilter: $priceFilter,
+                minimumContext: $minimumContext,
+                requiredCapabilities: $requiredCapabilities,
+                resultCount: filteredModels.count,
+                onReset: resetFilters
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func moderationBadge(for model: AvailableModel) -> some View {
+        if let moderated = model.topProvider?.isModerated {
+            Label(
+                moderated ? "服务商标记：启用内容审查" : "服务商标记：未启用内容审查",
+                systemImage: moderated ? "checkmark.shield" : "shield.slash"
+            )
+            .font(.system(size: 11, weight: .medium))
+            .foregroundColor(moderated ? .orange : .green)
+        } else {
+            Label("服务商未提供审查状态", systemImage: "questionmark.shield")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.secondary)
+        }
+    }
+
+    private func resetFilters() {
+        moderationFilter = .all
+        priceFilter = .all
+        minimumContext = 0
+        requiredCapabilities.removeAll()
+    }
+}
+
+private struct ModelFilterView: View {
+    @Binding var moderationFilter: ModelModerationFilter
+    @Binding var priceFilter: ModelPriceFilter
+    @Binding var minimumContext: Int
+    @Binding var requiredCapabilities: Set<ModelCapability>
+    let resultCount: Int
+    let onReset: () -> Void
+
+    @Environment(\.presentationMode) private var presentationMode
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section {
+                    Picker("价格", selection: $priceFilter) {
+                        ForEach(ModelPriceFilter.allCases) { filter in
+                            Text(filter.name).tag(filter)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("价格")
+                }
+
+                Section {
+                    Picker("审查状态", selection: $moderationFilter) {
+                        ForEach(ModelModerationFilter.allCases) { filter in
+                            Text(filter.name).tag(filter)
+                        }
+                    }
+                } header: {
+                    Text("内容审查")
+                } footer: {
+                    Text("此状态来自 OpenRouter 的 top_provider.is_moderated 字段。“未启用审核”只表示当前服务商这样标记，不保证模型没有自身限制，也不代表可以绕过平台规则。")
+                }
+
+                Section {
+                    Picker("最低上下文", selection: $minimumContext) {
+                        Text("不限").tag(0)
+                        Text("至少 32K").tag(32_000)
+                        Text("至少 64K").tag(64_000)
+                        Text("至少 128K").tag(128_000)
+                        Text("至少 256K").tag(256_000)
+                        Text("至少 1M").tag(1_000_000)
+                    }
+                } header: {
+                    Text("上下文长度")
+                }
+
+                Section {
+                    ForEach(ModelCapability.allCases) { capability in
+                        Toggle(
+                            isOn: Binding(
+                                get: { requiredCapabilities.contains(capability) },
+                                set: { enabled in
+                                    if enabled {
+                                        requiredCapabilities.insert(capability)
+                                    } else {
+                                        requiredCapabilities.remove(capability)
+                                    }
+                                }
+                            )
+                        ) {
+                            Label(capability.name, systemImage: capability.icon)
+                        }
+                    }
+                } header: {
+                    Text("必须支持的能力")
+                } footer: {
+                    Text("同时打开多个能力时，模型必须满足全部条件。能力信息来自接口返回的 supported_parameters 和 architecture 字段。")
+                }
+
+                Section {
+                    Button(role: .destructive) {
+                        onReset()
+                    } label: {
+                        Label("重置全部筛选", systemImage: "arrow.counterclockwise")
+                    }
+                }
+            }
+            .navigationTitle("筛选模型（\(resultCount)）")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("完成") {
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                    .font(.system(size: 16, weight: .semibold))
                 }
             }
         }
