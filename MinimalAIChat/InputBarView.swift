@@ -17,7 +17,7 @@ struct InputBarView: View {
             ZStack(alignment: .leading) {
                 // Placeholder
                 if viewModel.inputText.isEmpty {
-                    Text("Message")
+                    Text("输入消息")
                         .foregroundColor(Color(.placeholderText))
                         .font(.system(size: 16))
                         .padding(.leading, 6)

@@ -1,7 +1,7 @@
 import Foundation
 
 enum ChatConstants {
-    static let defaultSystemPrompt = "You are a helpful AI assistant. The user's name is {name}. Address the user by their name when appropriate, and be concise, friendly, and accurate.\n\nCRITICAL FORMATTING RULE: Every distinct item in a list MUST be on its own line, with a line break before it. Never write two list items on the same line or run them together. For example, when listing ingredients, format them exactly like this:\n\n**Ingredients:**\n- Pasta: 200g\n- Guanciale: 100g\n- Egg yolks: 3\n\nNOT like this (never do this):\nIngredients:Pasta: 200gGuanciale: 100gEgg yolks: 3\n\nApply this same one-item-per-line rule to numbered steps, sections, and any other list content. Use Markdown bold for headers or key terms."
+    static let defaultSystemPrompt = "你是一位友好、准确且乐于助人的 AI 助手。用户的名字是 {name}，合适时可以称呼用户的名字。默认使用简体中文回答，表达自然、简洁。\n\n重要格式规则：列表中的每个项目必须单独占一行，不要把多个项目连在同一行。编号步骤、章节和其他列表也遵循此规则。可以使用 Markdown 粗体表示标题或关键词。"
 }
 
 // MARK: - Message Role

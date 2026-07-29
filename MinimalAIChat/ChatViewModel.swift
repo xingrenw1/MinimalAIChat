@@ -49,7 +49,7 @@ final class ChatViewModel: ObservableObject {
             // Clean up any stale, empty "New Chat" sessions from previous launches
             // so we don't accumulate an endless list of unused chats.
             loadedSessions = saved.filter { session in
-                !(session.title == "New Chat" && session.messages.count <= 1)
+                !((session.title == "New Chat" || session.title == "新对话") && session.messages.count <= 1)
             }
             
             let initialCount = loadedSessions.reduce(0) { $0 + $1.messages.count }
@@ -62,10 +62,10 @@ final class ChatViewModel: ObservableObject {
         }
 
         // Always start with a fresh welcoming session on launch
-        let fresh = ChatSession(title: "New Chat", messages: [
+        let fresh = ChatSession(title: "新对话", messages: [
             ChatMessage(
                 role: .assistant,
-                content: "Hello! I'm your AI assistant. How can I help you today? 👋"
+                content: "你好！我是你的 AI 助手。今天想聊些什么？👋"
             )
         ])
         loadedSessions.insert(fresh, at: 0)
@@ -158,10 +158,10 @@ final class ChatViewModel: ObservableObject {
         currentTask?.cancel()
         ProactiveChatManager.shared.cancelPending()
         isTyping = false
-        let session = ChatSession(title: "New Chat", messages: [
+        let session = ChatSession(title: "新对话", messages: [
             ChatMessage(
                 role: .assistant,
-                content: "Hello! I'm your AI assistant. How can I help you today? 👋"
+                content: "你好！我是你的 AI 助手。今天想聊些什么？👋"
             )
         ])
         sessions.insert(session, at: 0)
@@ -438,12 +438,12 @@ final class ChatViewModel: ObservableObject {
         sessions[idx].lastUpdated = Date()
 
         // Auto-title the session from the first user message
-        if message.role == .user && sessions[idx].title == "New Chat" {
+        if message.role == .user && (sessions[idx].title == "New Chat" || sessions[idx].title == "新对话") {
             let words = message.content
                 .split(separator: " ")
                 .prefix(5)
                 .joined(separator: " ")
-            sessions[idx].title = words.isEmpty ? "New Chat" : words
+            sessions[idx].title = words.isEmpty ? "新对话" : words
         }
 
         persistSessions()
@@ -514,7 +514,7 @@ final class ChatViewModel: ObservableObject {
            let description = apiError.errorDescription {
             return "⚠️ \(description)"
         }
-        return "⚠️ An unexpected error occurred: \(error.localizedDescription)"
+        return "⚠️ 发生意外错误：\(error.localizedDescription)"
     }
 
     /// Removes any empty assistant messages that were orphaned by a hard app termination mid-stream.

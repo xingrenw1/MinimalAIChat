@@ -330,7 +330,7 @@ struct WebSearchIndicatorView: View {
                     value: isPulsing
                 )
 
-            Text("Searching the web…")
+            Text("正在搜索网页…")
                 .font(.system(size: 14))
                 .foregroundColor(.secondary)
                 .opacity(isPulsing ? 0.5 : 1.0)

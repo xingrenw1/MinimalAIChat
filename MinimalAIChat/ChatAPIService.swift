@@ -129,24 +129,24 @@ enum APIError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidURL(let url):
-            return "'\(url)' is not a valid URL. Check Base URL in Settings."
+            return "“\(url)”不是有效地址，请检查设置中的基础地址。"
         case .emptyModel:
-            return "Model name is empty. Set it in Settings → Model."
+            return "模型名称为空，请前往“设置 → 模型”填写。"
         case .timedOut:
-            return "The request timed out (120 s). The server may be overloaded or unreachable — please try again."
+            return "请求超时（120 秒）。服务器可能繁忙或无法连接，请重试。"
         case .httpError(let code, let msg):
             let detail = msg.isEmpty ? "" : "\n\n\(msg)"
-            return "Server responded with HTTP \(code).\(detail)"
+            return "服务器返回 HTTP \(code)。\(detail)"
         case .emptyResponse:
-            return "The server returned an empty response."
+            return "服务器返回了空响应。"
         case .decodingFailed(let reason):
-            return "Could not parse the server response.\n\(reason)"
+            return "无法解析服务器响应。\n\(reason)"
         case .networkFailure(let error):
-            return "Network error: \(error.localizedDescription)"
+            return "网络错误：\(error.localizedDescription)"
         case .cancelled:
-            return "Request was cancelled."
+            return "请求已取消。"
         case .unsupportedToolFormat:
-            return "This model tried to use a tool in a way this app doesn't support. Try rephrasing your question, or disable web search for this model in Settings."
+            return "模型尝试使用当前应用不支持的工具格式。请换一种问法，或在设置中关闭该模型的网页搜索。"
         }
     }
 }
@@ -225,7 +225,7 @@ final class ChatAPIService {
         // Temporal context is injected as a separate system message immediately
         // before the user's chat history so the model always has an accurate
         // date reference regardless of its training cut-off.
-        let temporalContent = "You are a minimalist AI assistant. Today's date is \(todayString). Your temporal context must strictly be based on this current date."
+        let temporalContent = "今天的日期是 \(todayString)。涉及时间的回答必须以这个当前日期为准。除非用户明确要求其他语言，否则请使用简体中文。"
 
         // ── 3. Build request body ──────────────────────────────────────────
         let combinedSystemContent = personalityContent + "\n\n" + temporalContent
@@ -336,7 +336,7 @@ final class ChatAPIService {
                     // Unrecognized/hallucinated tool call — still must respond so
                     // its tool_call_id isn't left unanswered.
                     toolResultMessages.append(
-                        APIMessage(role: "tool", content: "This tool is not available.", toolCallId: call.id)
+                        APIMessage(role: "tool", content: "此工具不可用。", toolCallId: call.id)
                     )
                     continue
                 }
@@ -574,7 +574,7 @@ final class ChatAPIService {
                     let dateFormatter = DateFormatter()
                     dateFormatter.dateStyle = .long
                     let todayString = dateFormatter.string(from: Date())
-                    let temporalContent = "You are a minimalist AI assistant. Today's date is \(todayString). Your temporal context must strictly be based on this current date."
+                    let temporalContent = "今天的日期是 \(todayString)。涉及时间的回答必须以这个当前日期为准。除非用户明确要求其他语言，否则请使用简体中文。"
 
                     // ── 3. Build request body ──────────────────────────────────────────
                     let combinedSystemContent = personalityContent + "\n\n" + temporalContent

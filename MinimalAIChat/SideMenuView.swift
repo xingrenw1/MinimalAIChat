@@ -32,7 +32,7 @@ struct SideMenuView: View {
                 clearChatButton
 
                 // ── Section Title ─────────────────────────────────────────
-                Text("Recent")
+                Text("最近对话")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 20)
@@ -72,9 +72,9 @@ struct SideMenuView: View {
         // ── Clear Chat confirmation alert ─────────────────────────────────
         .alert(isPresented: $showClearAlert) {
             Alert(
-                title: Text("Delete Chat"),
-                message: Text("This chat will be permanently removed from your history."),
-                primaryButton: .destructive(Text("Delete")) {
+                title: Text("删除对话"),
+                message: Text("此对话将从历史记录中永久删除。"),
+                primaryButton: .destructive(Text("删除")) {
                     withAnimation(.easeInOut(duration: 0.3)) {
                         isMenuOpen = false
                     }
@@ -108,7 +108,7 @@ struct SideMenuView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("MinimalAI")
                     .font(.system(size: 17, weight: .bold))
-                Text("Your AI assistant")
+                Text("你的 AI 助手")
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)
             }
@@ -131,7 +131,7 @@ struct SideMenuView: View {
                 Image(systemName: "plus.bubble")
                     .font(.system(size: 15, weight: .medium))
                     .frame(width: 22)
-                Text("New Chat")
+                Text("新建对话")
                     .font(.system(size: 15, weight: .medium))
                 Spacer()
             }
@@ -153,7 +153,7 @@ struct SideMenuView: View {
                 Image(systemName: "trash")
                     .font(.system(size: 14, weight: .medium))
                     .frame(width: 22)
-                Text("Delete Chat")
+                Text("删除对话")
                     .font(.system(size: 15, weight: .medium))
                 Spacer()
             }
@@ -196,10 +196,10 @@ struct SideMenuView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(userName.isEmpty ? "Set up your name" : userName)
+                    Text(userName.isEmpty ? "设置你的名字" : userName)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(userName.isEmpty ? .secondary : .primary)
-                    Text("Personal Plan")
+                    Text("个人设置")
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
                 }
@@ -236,7 +236,7 @@ struct SessionRowView: View {
                     .frame(width: 20)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(session.title)
+                    Text(session.title == "New Chat" ? "新对话" : session.title)
                         .font(.system(size: 14, weight: isActive ? .semibold : .regular))
                         .foregroundColor(isActive ? .accentColor : .primary)
                         .lineLimit(1)
@@ -262,6 +262,7 @@ struct SessionRowView: View {
 
     private func relativeDate(_ date: Date) -> String {
         let formatter = RelativeDateTimeFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
         formatter.unitsStyle = .short
         return formatter.localizedString(for: date, relativeTo: Date())
     }

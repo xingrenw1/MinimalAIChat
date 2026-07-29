@@ -11,13 +11,13 @@ enum TavilySearchError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidAPIKey:
-            return "Invalid or missing Tavily API key."
+            return "Tavily API Key 无效或未填写。"
         case .networkFailure(let err):
-            return "Network error during web search: \(err.localizedDescription)"
+            return "网页搜索时发生网络错误：\(err.localizedDescription)"
         case .noResults:
-            return "The web search returned no results."
+            return "网页搜索没有返回结果。"
         case .decodingFailed:
-            return "Failed to parse the web search response."
+            return "无法解析网页搜索响应。"
         }
     }
 }

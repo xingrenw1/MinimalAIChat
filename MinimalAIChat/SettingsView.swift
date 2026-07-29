@@ -25,7 +25,7 @@ struct SettingsView: View {
                 advancedSection
                 dangerSection
             }
-            .navigationTitle("API & Connection")
+            .navigationTitle("API 与连接")
             .navigationBarTitleDisplayMode(.inline)
 
 
@@ -39,9 +39,9 @@ struct SettingsView: View {
             .animation(.spring(response: 0.35, dampingFraction: 0.75), value: showSavedBanner)
         .alert(isPresented: $showResetAlert) {
             Alert(
-                title: Text("Reset to Defaults"),
-                message: Text("This will clear your API key, Base URL, and Model Name. This cannot be undone."),
-                primaryButton: .destructive(Text("Reset")) {
+                title: Text("恢复默认设置"),
+                message: Text("这将清除 API Key、基础地址和模型名称，且无法撤销。"),
+                primaryButton: .destructive(Text("恢复")) {
                     withAnimation { settings.resetToDefaults() }
                     flashSavedBanner()
                 },
@@ -56,7 +56,7 @@ struct SettingsView: View {
     private var endpointSection: some View {
         Section {
             VStack(alignment: .leading, spacing: 6) {
-                Label("Base URL", systemImage: "network")
+                Label("API 基础地址", systemImage: "network")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.secondary)
 
@@ -67,14 +67,14 @@ struct SettingsView: View {
                     .font(.system(size: 15, design: .monospaced))
                     .onChange(of: settings.baseURL) { _ in flashSavedBanner() }
 
-                Text("Supports OpenAI, Azure, Ollama, or any OpenAI-compatible endpoint.")
+                Text("支持 OpenAI、OpenRouter、Azure、Ollama 及其他 OpenAI 兼容接口。")
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.vertical, 4)
         } header: {
-            sectionHeader(icon: "server.rack", title: "Endpoint")
+            sectionHeader(icon: "server.rack", title: "接口地址")
         }
     }
 
@@ -82,7 +82,7 @@ struct SettingsView: View {
     private var modelSection: some View {
         Section {
             VStack(alignment: .leading, spacing: 6) {
-                Label("Model Name", systemImage: "cpu")
+                Label("模型名称", systemImage: "cpu")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.secondary)
 
@@ -92,13 +92,13 @@ struct SettingsView: View {
                     .font(.system(size: 15, design: .monospaced))
                     .onChange(of: settings.modelName) { _ in flashSavedBanner() }
 
-                Text("Examples: gpt-4o-mini · claude-3-haiku · llama3 · mistral")
+                Text("示例：gpt-4o-mini · claude-3-haiku · llama3 · mistral")
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)
             }
             .padding(.vertical, 4)
         } header: {
-            sectionHeader(icon: "brain.head.profile", title: "Model")
+            sectionHeader(icon: "brain.head.profile", title: "模型")
         }
     }
 
@@ -133,14 +133,14 @@ struct SettingsView: View {
                     .buttonStyle(.plain)
                 }
 
-                Text("Stored securely in the iOS Keychain — never in UserDefaults or iCloud.")
+                Text("安全存储在 iOS 钥匙串中，不会存入 UserDefaults 或 iCloud。")
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.vertical, 4)
         } header: {
-            sectionHeader(icon: "lock.shield", title: "Authentication")
+            sectionHeader(icon: "lock.shield", title: "身份认证")
         }
     }
 
@@ -150,10 +150,10 @@ struct SettingsView: View {
             HStack(spacing: 12) {
                 statusDot(settings.isConfigured)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(settings.isConfigured ? "Configuration valid" : "Incomplete configuration")
+                    Text(settings.isConfigured ? "配置有效" : "配置不完整")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(settings.isConfigured ? .primary : .secondary)
-                    Text(settings.hasAPIKey ? "API key present ✓" : "No API key — needed for most providers")
+                    Text(settings.hasAPIKey ? "已填写 API Key ✓" : "未填写 API Key——大多数提供商需要此项")
                         .font(.system(size: 12))
                         .foregroundColor(settings.hasAPIKey ? Color.green : Color.orange)
                 }
@@ -161,7 +161,7 @@ struct SettingsView: View {
             }
             .padding(.vertical, 4)
         } header: {
-            sectionHeader(icon: "checkmark.seal", title: "Status")
+            sectionHeader(icon: "checkmark.seal", title: "状态")
         }
     }
 
@@ -174,13 +174,13 @@ struct SettingsView: View {
                         .font(.system(size: 18))
                         .foregroundColor(.accentColor)
                         .frame(width: 24)
-                    Text("Advanced Options")
+                    Text("高级选项")
                         .font(.system(size: 16))
                 }
                 .padding(.vertical, 4)
             }
         } header: {
-            sectionHeader(icon: "gearshape.2", title: "Advanced")
+            sectionHeader(icon: "gearshape.2", title: "高级设置")
         }
     }
 
@@ -192,12 +192,12 @@ struct SettingsView: View {
             } label: {
                 HStack {
                     Image(systemName: "arrow.counterclockwise")
-                    Text("Reset to Defaults")
+                    Text("恢复默认设置")
                 }
                 .font(.system(size: 15, weight: .medium))
             }
         } header: {
-            sectionHeader(icon: "exclamationmark.triangle", title: "Danger Zone")
+            sectionHeader(icon: "exclamationmark.triangle", title: "重置")
         }
     }
 
@@ -231,7 +231,7 @@ struct SettingsView: View {
         HStack(spacing: 8) {
             Image(systemName: "checkmark.circle.fill")
                 .foregroundColor(.white)
-            Text("Settings Saved")
+            Text("设置已保存")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.white)
         }
@@ -278,37 +278,37 @@ struct AdvancedSettingsView: View {
                     }
                     .padding(.vertical, 4)
 
-                    Text("Optional. Lets the AI search the web for current information when needed. Get a free key at [tavily.com](https://tavily.com) — 1,000 searches/month free.")
+                    Text("可选。让 AI 在需要时搜索网页以获取最新信息。可在 [tavily.com](https://tavily.com) 获取免费 Key。")
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             } header: {
-                Text("Web Search (Tavily)")
+                Text("网页搜索（Tavily）")
             }
 
             Section {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Text("Temperature")
+                        Text("温度")
                         Spacer()
                         Text(String(format: "%.1f", settings.temperature))
                             .foregroundColor(.secondary)
                     }
                     Slider(value: $settings.temperature, in: 0...2, step: 0.1)
-                    Text("Lower is more focused and predictable, higher is more creative and random.")
+                    Text("数值越低越专注、稳定；数值越高越有创造性和随机性。")
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.vertical, 4)
             } header: {
-                Text("Creativity")
+                Text("创造性")
             }
 
             Section {
                 VStack(alignment: .leading, spacing: 6) {
-                    TextField("Unlimited", text: $maxTokensString)
+                    TextField("不限制", text: $maxTokensString)
                         .keyboardType(.numberPad)
                         .onChange(of: maxTokensString) { newValue in
                             let filtered = newValue.filter { $0.isNumber }
@@ -321,14 +321,14 @@ struct AdvancedSettingsView: View {
                                 settings.maxTokens = intVal
                             }
                         }
-                    Text("Limits how long a single reply can be. Leave empty for no limit.")
+                    Text("限制单次回复长度。留空表示不限制。")
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.vertical, 4)
             } header: {
-                Text("Max Tokens")
+                Text("最大 Token 数")
             }
             .onAppear {
                 if let mt = settings.maxTokens {
@@ -342,20 +342,20 @@ struct AdvancedSettingsView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Stepper(value: $settings.historyCharacterBudget, in: 1000...50000, step: 1000) {
                         HStack {
-                            Text("Budget:")
+                            Text("预算：")
                             Spacer()
-                            Text("\(settings.historyCharacterBudget) chars")
+                            Text("\(settings.historyCharacterBudget) 字符")
                                 .foregroundColor(.secondary)
                         }
                     }
-                    Text("How much of the conversation history is sent with each message. Higher uses more data/tokens per request but remembers more context.")
+                    Text("每次请求携带的历史对话长度。数值越高，记忆的上下文越多，同时也会消耗更多 Token。")
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.vertical, 4)
             } header: {
-                Text("Conversation Memory")
+                Text("对话记忆")
             }
 
             Section {
@@ -364,20 +364,20 @@ struct AdvancedSettingsView: View {
                 }) {
                     HStack {
                         Image(systemName: "arrow.counterclockwise")
-                        Text("Reset to Defaults")
+                        Text("恢复默认设置")
                     }
                     .font(.system(size: 15))
                     .foregroundColor(.red)
                 }
             }
         }
-        .navigationTitle("Advanced")
+        .navigationTitle("高级设置")
         .navigationBarTitleDisplayMode(.inline)
         .alert(isPresented: $showResetAlert) {
             Alert(
-                title: Text("Reset advanced settings?"),
-                message: Text("Temperature, Max Tokens, and Conversation Memory will be reset to their defaults."),
-                primaryButton: .destructive(Text("Reset")) {
+                title: Text("恢复高级设置？"),
+                message: Text("温度、最大 Token 数和对话记忆将恢复默认值。"),
+                primaryButton: .destructive(Text("恢复")) {
                     withAnimation {
                         settings.temperature = SettingsDefault.temperature
                         settings.maxTokens = nil

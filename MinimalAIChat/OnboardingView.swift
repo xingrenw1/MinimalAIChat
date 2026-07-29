@@ -78,11 +78,11 @@ struct OnboardingView: View {
             }
 
             VStack(spacing: 8) {
-                Text("Welcome to MinimalAI")
+                Text("欢迎使用 MinimalAI")
                     .font(.system(size: 28, weight: .bold))
                     .multilineTextAlignment(.center)
 
-                Text("Let's set up your personal assistant\nin just a few seconds.")
+                Text("只需几秒钟，即可完成\n你的专属助手设置。")
                     .font(.system(size: 16))
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
@@ -93,11 +93,11 @@ struct OnboardingView: View {
 
     private var nameField: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("Your Name", systemImage: "person")
+            Label("你的名字", systemImage: "person")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(.secondary)
 
-            TextField("e.g. Valerio", text: $userName)
+            TextField("例如：老师", text: $userName)
                 .font(.system(size: 16))
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
@@ -105,7 +105,7 @@ struct OnboardingView: View {
                 .cornerRadius(12)
                 .modifier(ShakeEffect(animating: shakeUserName))
 
-            Text("Used to personalise your AI conversations.")
+            Text("用于个性化你的 AI 对话。")
                 .font(.system(size: 12))
                 .foregroundColor(.secondary)
         }
@@ -113,11 +113,11 @@ struct OnboardingView: View {
 
     private var baseURLField: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("Base URL (Endpoint)", systemImage: "link")
+            Label("API 基础地址（Endpoint）", systemImage: "link")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(.secondary)
 
-            TextField("e.g. https://api.openai.com/v1", text: $baseURL)
+            TextField("例如：https://openrouter.ai/api/v1", text: $baseURL)
                 .font(.system(size: 16))
                 .keyboardType(.URL)
                 .autocapitalization(.none)
@@ -132,11 +132,11 @@ struct OnboardingView: View {
 
     private var modelNameField: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("Model Name", systemImage: "cpu")
+            Label("模型名称", systemImage: "cpu")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(.secondary)
 
-            TextField("e.g. gpt-4o-mini", text: $modelName)
+            TextField("例如：提供商/模型名称", text: $modelName)
                 .font(.system(size: 16))
                 .autocapitalization(.none)
                 .disableAutocorrection(true)
@@ -177,7 +177,7 @@ struct OnboardingView: View {
             .background(Color(.secondarySystemBackground))
             .cornerRadius(12)
 
-            Text("Stored securely in the iOS Keychain. You can skip this and add it later in Settings.")
+            Text("安全存储在 iOS 钥匙串中。你也可以暂时跳过，稍后在设置中添加。")
                 .font(.system(size: 12))
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -186,7 +186,7 @@ struct OnboardingView: View {
 
     private var tavilyApiKeyField: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("Tavily API Key (optional)", systemImage: "magnifyingglass")
+            Label("Tavily API Key（可选）", systemImage: "magnifyingglass")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(.secondary)
 
@@ -213,7 +213,7 @@ struct OnboardingView: View {
             .background(Color(.secondarySystemBackground))
             .cornerRadius(12)
 
-            Text("Tavily powers real-time web search, so your assistant can look up current information instead of relying only on what it already knows. Get a free key at tavily.com. Stored securely in the iOS Keychain — you can skip this and add it later in Settings.")
+            Text("Tavily 提供实时网页搜索，让助手可以查询最新信息。可在 tavily.com 获取免费 Key。它会安全存储在 iOS 钥匙串中，也可以暂时跳过。")
                 .font(.system(size: 12))
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -223,7 +223,7 @@ struct OnboardingView: View {
     private var continueButton: some View {
         Button(action: finish) {
             HStack(spacing: 8) {
-                Text("Get Started")
+                Text("开始使用")
                     .font(.system(size: 17, weight: .semibold))
                 Image(systemName: "arrow.right")
                     .font(.system(size: 15, weight: .semibold))

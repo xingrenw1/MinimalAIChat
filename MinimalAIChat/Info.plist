@@ -15,15 +15,15 @@
 	<key>CFBundlePackageType</key>
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
 	<key>CFBundleShortVersionString</key>
-	<string>2.5</string>
+	<string>2.6</string>
 	<key>CFBundleVersion</key>
-	<string>3</string>
+	<string>4</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>MinimumOSVersion</key>
 	<string>15.0</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>MinimalAIChat uses your photo library to let you set a profile picture.</string>
+	<string>MinimalAIChat 需要访问照片图库，以便你设置个人头像。</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

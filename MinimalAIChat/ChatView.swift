@@ -43,7 +43,7 @@ struct ChatView: View {
                             }) {
                                 HStack(spacing: 6) {
                                     Image(systemName: "arrow.clockwise")
-                                    Text("Retry")
+                                    Text("重试")
                                 }
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundColor(.secondary)
@@ -198,21 +198,21 @@ struct ChatView: View {
         let (title, message, action): (String, String, String) = {
             switch error {
             case .invalidURL:
-                return ("Invalid Endpoint", error?.errorDescription ?? "", "Open Settings")
+                return ("接口地址无效", error?.errorDescription ?? "", "打开设置")
             case .emptyModel:
-                return ("Model Not Set", error?.errorDescription ?? "", "Open Settings")
+                return ("未设置模型", error?.errorDescription ?? "", "打开设置")
             case .httpError(let code, _) where code == 401:
-                return ("Unauthorized", "Your API key was rejected by the server. Please check it in Settings.", "Open Settings")
+                return ("认证失败", "服务器拒绝了 API Key，请在设置中检查。", "打开设置")
             case .httpError(let code, _) where code == 429:
-                return ("Rate Limited", "You have exceeded your API quota. Please wait before retrying.", "OK")
+                return ("请求受限", "已超过 API 配额或速率限制，请稍后重试。", "确定")
             case .networkFailure:
-                return ("Network Error", error?.errorDescription ?? "Check your internet connection.", "OK")
+                return ("网络错误", error?.errorDescription ?? "请检查网络连接。", "确定")
             default:
-                return ("Request Failed", error?.errorDescription ?? "An unexpected error occurred.", "OK")
+                return ("请求失败", error?.errorDescription ?? "发生了意外错误。", "确定")
             }
         }()
 
-        if action == "Open Settings" {
+        if action == "打开设置" {
             // On iOS 15 we can open the app's Settings URL
             return Alert(
                 title: Text(title),
@@ -223,7 +223,7 @@ struct ChatView: View {
                     }
                     viewModel.dismissError()
                 },
-                secondaryButton: .cancel(Text("Dismiss")) {
+                secondaryButton: .cancel(Text("关闭")) {
                     viewModel.dismissError()
                 }
             )

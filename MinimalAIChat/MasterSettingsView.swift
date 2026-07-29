@@ -16,7 +16,7 @@ struct MasterSettingsView: View {
                             Image(systemName: "person.crop.circle")
                                 .font(.system(size: 20))
                                 .foregroundColor(.accentColor)
-                            Text("Edit Profile Name")
+                            Text("编辑个人资料")
                                 .font(.system(size: 16))
                         }
                         .padding(.vertical, 4)
@@ -27,7 +27,7 @@ struct MasterSettingsView: View {
                             Image(systemName: "brain.head.profile")
                                 .font(.system(size: 20))
                                 .foregroundColor(.accentColor)
-                            Text("AI Personality")
+                            Text("AI 人格设定")
                                 .font(.system(size: 16))
                         }
                         .padding(.vertical, 4)
@@ -49,7 +49,7 @@ struct MasterSettingsView: View {
                             Image(systemName: "network")
                                 .font(.system(size: 20))
                                 .foregroundColor(.accentColor)
-                            Text("API & Connection Settings")
+                            Text("API 与连接设置")
                                 .font(.system(size: 16))
                         }
                         .padding(.vertical, 4)
@@ -60,20 +60,20 @@ struct MasterSettingsView: View {
                             Image(systemName: "info.circle")
                                 .font(.system(size: 20))
                                 .foregroundColor(.accentColor)
-                            Text("About")
+                            Text("关于")
                                 .font(.system(size: 16))
                         }
                         .padding(.vertical, 4)
                     }
                 } header: {
-                    Text("Settings")
+                    Text("设置")
                 }
             }
-            .navigationTitle("Settings")
+            .navigationTitle("设置")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button("完成") {
                         presentationMode.wrappedValue.dismiss()
                     }
                     .font(.system(size: 16, weight: .semibold))
@@ -133,20 +133,20 @@ struct ProfileSettingsView: View {
                 .listRowBackground(Color.clear)
                 .padding(.vertical, 10)
             } header: {
-                Text("Your Profile Picture")
+                Text("头像")
             }
 
             Section {
-                TextField("e.g. Valerio", text: $userName)
+                TextField("例如：老师", text: $userName)
                     .font(.system(size: 16))
                     .padding(.vertical, 4)
             } header: {
-                Text("Your Name")
+                Text("你的名字")
             } footer: {
-                Text("Used to personalise your AI conversations.")
+                Text("用于个性化你的 AI 对话。")
             }
         }
-        .navigationTitle("Edit Profile")
+        .navigationTitle("编辑个人资料")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showingImagePicker) {
             SystemImagePicker(selectedImage: Binding(get: { settings.profileImage }, set: { newImg in
@@ -179,15 +179,15 @@ struct PromptSettingsView: View {
                 }) {
                     HStack {
                         Image(systemName: "arrow.counterclockwise")
-                        Text("Reset to Default")
+                        Text("恢复默认")
                     }
                     .font(.system(size: 15))
                     .foregroundColor(.red)
                 }
             } header: {
-                Text("System Prompt")
+                Text("系统提示词")
             } footer: {
-                Text("This text dictates how the AI behaves. Use {name} anywhere in your prompt to dynamically inject your profile name.")
+                Text("这段文字决定 AI 的行为。可在提示词中使用 {name} 自动插入你的名字。")
             }
         }
         .onAppear {
@@ -197,9 +197,9 @@ struct PromptSettingsView: View {
         }
         .alert(isPresented: $showResetAlert) {
             Alert(
-                title: Text("Reset system prompt?"),
-                message: Text("Your custom prompt will be replaced with the default."),
-                primaryButton: .destructive(Text("Reset")) {
+                title: Text("恢复默认提示词？"),
+                message: Text("当前自定义提示词将被默认内容替换。"),
+                primaryButton: .destructive(Text("恢复")) {
                     withAnimation {
                         customSystemPrompt = ChatConstants.defaultSystemPrompt
                     }
@@ -207,7 +207,7 @@ struct PromptSettingsView: View {
                 secondaryButton: .cancel()
             )
         }
-        .navigationTitle("AI Personality")
+        .navigationTitle("AI 人格设定")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -329,14 +329,14 @@ struct AboutView: View {
                         Image(systemName: "tag")
                             .foregroundColor(.secondary)
                             .frame(width: 24)
-                        Text("Version")
+                        Text("版本")
                         Spacer()
                         Text(version)
                             .foregroundColor(.secondary)
                     }
                 }
             } header: {
-                Text("App Info")
+                Text("应用信息")
             }
 
             Section {
@@ -349,7 +349,7 @@ struct AboutView: View {
                         Image(systemName: "chevron.left.forwardslash.chevron.right")
                             .foregroundColor(.accentColor)
                             .frame(width: 24)
-                        Text("GitHub Repository")
+                        Text("GitHub 仓库")
                             .foregroundColor(.primary)
                     }
                 }
@@ -363,17 +363,17 @@ struct AboutView: View {
                         Image(systemName: "bubble.left.and.bubble.right")
                             .foregroundColor(.accentColor)
                             .frame(width: 24)
-                        Text("Discord Server")
+                        Text("Discord 社区")
                             .foregroundColor(.primary)
                     }
                 }
             } header: {
-                Text("Links")
+                Text("链接")
             } footer: {
-                Text("Join the Discord server for support & feedback.")
+                Text("加入 Discord 社区以获取支持或提交反馈。")
             }
         }
-        .navigationTitle("About")
+        .navigationTitle("关于")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
