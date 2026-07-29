@@ -24,46 +24,48 @@ class ApiService {
       system.write('\n\n【角色扮演设定】\n${settings.roleplayPrompt.trim()}');
     }
 
-    String searchContext = '';
-    if (settings.webSearch &&
-        settings.tavilyKey.trim().isNotEmpty &&
-        messages.isNotEmpty) {
-      final query = messages.last.content.trim();
-      if (query.isNotEmpty) {
-        searchContext = await _search(settings.tavilyKey, query);
-      }
-    }
-
     final apiMessages = <Map<String, dynamic>>[
       {'role': 'system', 'content': system.toString()},
-      for (var i = 0; i < messages.length; i++)
-        _encodeMessage(
-          messages[i],
-          i == messages.length - 1 ? searchContext : '',
-        ),
+      for (final message in messages) _encodeMessage(message),
     ];
 
-    final response = await http
-        .post(
-          uri,
-          headers: headers,
-          body: jsonEncode({
-            'model': settings.model.trim(),
-            'messages': apiMessages,
-            'temperature': 0.95,
-            'stream': false,
-          }),
-        )
-        .timeout(const Duration(seconds: 150));
+    final toolsEnabled = settings.webSearch && settings.tavilyKey.trim().isNotEmpty;
+    var body = await _postCompletion(
+      uri: uri,
+      headers: headers,
+      model: settings.model.trim(),
+      messages: apiMessages,
+      toolsEnabled: toolsEnabled,
+    );
+    var responseMessage = _responseMessage(body);
+    final toolCalls = responseMessage['tool_calls'] as List<dynamic>? ?? [];
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('HTTP ${response.statusCode}: ${_serverMessage(response.body)}');
+    if (toolsEnabled && toolCalls.isNotEmpty) {
+      apiMessages.add(responseMessage);
+      for (final rawCall in toolCalls.whereType<Map<String, dynamic>>()) {
+        final function = rawCall['function'] as Map<String, dynamic>? ?? {};
+        if (function['name'] != 'web_search') continue;
+        final query = _toolQuery(function['arguments']);
+        final result = query.isEmpty
+            ? '搜索词为空，无法执行。'
+            : await _search(settings.tavilyKey, query);
+        apiMessages.add({
+          'role': 'tool',
+          'tool_call_id': rawCall['id'] as String? ?? '',
+          'content': result.isEmpty ? '没有找到可用的网页结果。' : result,
+        });
+      }
+      body = await _postCompletion(
+        uri: uri,
+        headers: headers,
+        model: settings.model.trim(),
+        messages: apiMessages,
+        toolsEnabled: false,
+      );
+      responseMessage = _responseMessage(body);
     }
-    final body = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
-    final choices = body['choices'] as List<dynamic>? ?? [];
-    if (choices.isEmpty) throw Exception('服务器返回了空响应');
-    final message = (choices.first as Map<String, dynamic>)['message'] as Map<String, dynamic>?;
-    final content = message?['content'];
+
+    final content = responseMessage['content'];
     if (content is String && content.trim().isNotEmpty) return content.trim();
     if (content is List) {
       final text = content
@@ -77,14 +79,75 @@ class ApiService {
     throw Exception('模型没有返回文本');
   }
 
-  static Map<String, dynamic> _encodeMessage(
-    ChatMessage message,
-    String searchContext,
-  ) {
-    var text = message.content;
-    if (message.role == MessageRole.user && searchContext.isNotEmpty) {
-      text = '$text\n\n【联网搜索资料】\n$searchContext';
+  static Future<Map<String, dynamic>> _postCompletion({
+    required Uri uri,
+    required Map<String, String> headers,
+    required String model,
+    required List<Map<String, dynamic>> messages,
+    required bool toolsEnabled,
+  }) async {
+    final request = <String, dynamic>{
+      'model': model,
+      'messages': messages,
+      'temperature': 0.95,
+      'stream': false,
+    };
+    if (toolsEnabled) {
+      request['tools'] = [
+        {
+          'type': 'function',
+          'function': {
+            'name': 'web_search',
+            'description': '当问题需要最新、实时或可核实的网络资料时搜索互联网。不需要最新资料时不要调用。',
+            'parameters': {
+              'type': 'object',
+              'properties': {
+                'query': {
+                  'type': 'string',
+                  'description': '简洁明确的搜索关键词',
+                },
+              },
+              'required': ['query'],
+            },
+          },
+        },
+      ];
+      request['tool_choice'] = 'auto';
     }
+    final response = await http
+        .post(uri, headers: headers, body: jsonEncode(request))
+        .timeout(const Duration(seconds: 150));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('HTTP ${response.statusCode}: ${_serverMessage(response.body)}');
+    }
+    return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  static Map<String, dynamic> _responseMessage(Map<String, dynamic> body) {
+    final choices = body['choices'] as List<dynamic>? ?? [];
+    if (choices.isEmpty) throw Exception('服务器返回了空响应');
+    final message = (choices.first as Map<String, dynamic>)['message'] as Map<String, dynamic>?;
+    if (message == null) throw Exception('服务器响应缺少 message');
+    return Map<String, dynamic>.from(message);
+  }
+
+  static String _toolQuery(dynamic arguments) {
+    try {
+      final decoded = arguments is String ? jsonDecode(arguments) : arguments;
+      if (decoded is Map<String, dynamic>) {
+        return (decoded['query'] as String? ?? '').trim();
+      }
+      if (decoded is Map) {
+        return '${decoded['query'] ?? ''}'.trim();
+      }
+    } catch (_) {
+      if (arguments is String) return arguments.trim();
+    }
+    return '';
+  }
+
+  static Map<String, dynamic> _encodeMessage(ChatMessage message) {
+    final text = message.content;
     if (message.role != MessageRole.user || message.attachments.isEmpty) {
       return {'role': message.role.name, 'content': text};
     }

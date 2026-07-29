@@ -628,7 +628,7 @@ class _SettingsPageState extends State<SettingsPage> {
           _title('联网搜索'),
           SwitchListTile(
             title: const Text('启用联网搜索'),
-            subtitle: const Text('使用 Tavily 获取资料后交给当前模型回答'),
+            subtitle: const Text('由 AI 自己判断是否需要调用 Tavily 搜索最新资料'),
             value: settings.webSearch,
             onChanged: (value) => state.updateSettings((s) => s.webSearch = value),
           ),
