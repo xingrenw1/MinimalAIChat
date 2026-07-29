@@ -14,10 +14,12 @@ A native iOS 15 AI chat client designed to bring modern artificial intelligence 
 
 ## Features
 
-MinimalAIChat is a native iOS 15 application built to replace clunky web interfaces for AI services like Gemini or ChatGPT, ensuring older devices can still leverage modern LLMs. 
+MinimalAIChat is a native iOS 15 application built to replace clunky web interfaces for AI services like Gemini or ChatGPT, ensuring older devices can still leverage modern LLMs.
 
 * 🚀 **Ultra-lightweight:** Built with native SwiftUI and minimal dependencies for excellent performance on older devices.
 * 💾 **Local History:** All your conversations are saved locally and securely on your device.
+* 💬 **Proactive Chat:** The current AI persona can generate a future message from recent conversation context and deliver it through an iOS local notification without waiting for the user to speak first.
+* 🇨🇳 **Chinese Proactive Messages:** Proactive messages can be generated in Simplified Chinese or English.
 * 🧹 **Smart Auto-Cleanup:** Empty or accidental sessions are automatically cleared on the next app launch, keeping your sidebar clutter-free.
 * 🔒 **Privacy First:** API calls travel directly from your phone to the provider. No intermediate servers, proxies, or data logging.
 * 🔎 **Web Search (optional):** Let the AI search the web for current information — news, recent events, anything past its training cutoff — using [Tavily](https://tavily.com). Works with any provider. The AI decides on its own when a search is actually needed.
@@ -32,6 +34,8 @@ MinimalAIChat is a native iOS 15 application built to replace clunky web interfa
 
 Since this app is **not available on the App Store**, you will need to sideload it. The .ipa file provided in the [Releases](../../releases) section is unsigned and ready for either of the methods below.
 
+You can also open the repository's **Actions** tab, run **Build Unsigned IPA**, and download the `MinimalAIChat-unsigned-ipa` artifact after the workflow completes. The artifact must still be signed by TrollStore, AltStore, Sideloadly, or another compatible signing method before installation.
+
 ### Option 1: TrollStore (Recommended)
 If your device is running **iOS 14.0 through iOS 17.0**:
 1. Install [TrollStore](https://github.com/opa334/TrollStore) on your device.
@@ -43,6 +47,16 @@ Works on **any current iOS version**, as these tools sign the app using your per
 1. Install [AltStore](https://altstore.io) or [Sideloadly](https://sideloadly.io) on your computer.
 2. Connect your iPhone and follow the respective tool's guide to install MinimalAIChat.ipa.
 3. *Note:* Free Apple ID developer certificates expire every 7 days and require a manual or automated refresh. Paid Apple Developer accounts last for 1 year.
+
+## Proactive Chat
+
+1. Open **Settings → 主动聊天与通知**.
+2. Enable **主动聊天** and allow notification permission.
+3. Choose Chinese or English and select the delay before the next message.
+4. Keep the app open briefly so the current persona can generate the next message from the latest conversation.
+5. iOS delivers the message as a local notification at the selected time. Opening the app imports that message into the original chat session.
+
+Because iOS does not allow ordinary apps to run unrestricted AI requests indefinitely in the background, the next message is generated while the app is active and scheduled in advance. This does not require a push server.
 
 ## How to Obtain an API Key
 
